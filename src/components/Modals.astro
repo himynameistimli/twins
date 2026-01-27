@@ -1,0 +1,105 @@
+---
+// Modal components for adding/editing items
+---
+
+<!-- Add/Manage Medication Modal -->
+<div id="med-modal" class="modal-overlay fixed inset-0 bg-black/70 justify-center items-center z-[1000] hidden">
+  <div class="bg-panel rounded-2xl p-6 w-[90%] max-w-[500px] max-h-[80vh] overflow-y-auto">
+    <h2 id="med-modal-title" class="text-xl font-bold mb-5">Add Medication</h2>
+    
+    <div id="med-list" class="mb-5"></div>
+    
+    <div id="med-form">
+      <label class="text-xs text-gray-400 mb-1.5 block">Medication Name</label>
+      <input 
+        type="text" 
+        id="med-name"
+        class="w-full px-4 py-3 border-none rounded-lg bg-card text-white text-base mb-4 placeholder:text-gray-400"
+        placeholder="e.g., Vitamin D, Tylenol"
+      />
+      
+      <label class="text-xs text-gray-400 mb-1.5 block">Doses Per Day</label>
+      <div class="flex gap-2 mb-4">
+        {[1, 2, 3, 4, 6, 8].map(num => (
+          <button 
+            type="button"
+            class="dose-count-btn flex-1 py-2.5 rounded-lg bg-card text-white text-sm font-semibold cursor-pointer border-2 border-transparent transition-all hover:border-accent-left"
+            data-doses={num}
+          >
+            {num}x
+          </button>
+        ))}
+      </div>
+      
+      <div id="dose-schedule" class="mb-4">
+        <!-- Dynamically populated dose times -->
+      </div>
+      
+      <div class="flex gap-2.5 justify-end mt-5">
+        <button 
+          class="px-5 py-2.5 border-none rounded-lg text-sm font-semibold cursor-pointer bg-card text-white active:scale-95 transition-transform"
+          data-action="close-modal"
+        >
+          Cancel
+        </button>
+        <button 
+          class="px-5 py-2.5 border-none rounded-lg text-sm font-semibold cursor-pointer bg-accent-left text-white active:scale-95 transition-transform"
+          data-action="save-medication"
+        >
+          Add Medication
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Name Edit Modal -->
+<div id="name-modal" class="modal-overlay fixed inset-0 bg-black/70 justify-center items-center z-[1000] hidden">
+  <div class="bg-panel rounded-2xl p-6 w-[90%] max-w-[450px]">
+    <h2 class="text-xl font-bold mb-5">Edit Name</h2>
+    <input 
+      type="text" 
+      id="name-input"
+      class="w-full px-4 py-3 border-none rounded-lg bg-card text-white text-base mb-4 placeholder:text-gray-400"
+      placeholder="Enter name"
+    />
+    <div class="flex gap-2.5 justify-end mt-5">
+      <button 
+        class="px-5 py-2.5 border-none rounded-lg text-sm font-semibold cursor-pointer bg-card text-white active:scale-95 transition-transform"
+        data-action="close-modal"
+      >
+        Cancel
+      </button>
+      <button 
+        class="px-5 py-2.5 border-none rounded-lg text-sm font-semibold cursor-pointer bg-accent-left text-white active:scale-95 transition-transform"
+        data-action="save-name"
+      >
+        Save
+      </button>
+    </div>
+  </div>
+</div>
+
+<style>
+  .modal-overlay.active {
+    display: flex;
+  }
+  
+  .modal-overlay {
+    touch-action: none;
+    overscroll-behavior: contain;
+  }
+  
+  .dose-count-btn.selected {
+    border-color: #6366f1;
+    background: #6366f1;
+  }
+  
+  /* Body scroll lock when modal is open */
+  :global(body.modal-open) {
+    overflow: hidden;
+    position: fixed;
+    width: 100%;
+    touch-action: none;
+  }
+</style>

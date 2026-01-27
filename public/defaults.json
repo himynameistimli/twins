@@ -1,0 +1,65 @@
+{
+  "children": [
+    {
+      "name": "Emily",
+      "medications": [],
+      "feedSchedules": [
+        {
+          "id": "emily-feed",
+          "name": "Formula",
+          "defaultAmount": 110,
+          "times": ["00:00", "03:00", "06:00", "09:00", "12:00", "15:00", "18:00", "21:00"]
+        }
+      ]
+    },
+    {
+      "name": "Jimmy",
+      "medications": [
+        {
+          "id": "jimmy-captopril",
+          "name": "Captopril 0.5mg",
+          "dosesPerDay": 3,
+          "doseTimes": ["08:00", "16:00", "00:00"]
+        },
+        {
+          "id": "jimmy-digoxin",
+          "name": "Digoxin 12.6mcg",
+          "dosesPerDay": 1,
+          "doseTimes": ["08:00"]
+        },
+        {
+          "id": "jimmy-furosemide",
+          "name": "Furosemide 5mg",
+          "dosesPerDay": 2,
+          "doseTimes": ["08:00", "20:00"]
+        },
+        {
+          "id": "jimmy-mct",
+          "name": "MCT oil 1mL",
+          "dosesPerDay": 3,
+          "doseTimes": ["09:00", "15:00", "21:00"]
+        },
+        {
+          "id": "jimmy-vitd",
+          "name": "Vitamin D 10mcg",
+          "dosesPerDay": 1,
+          "doseTimes": ["20:00"]
+        },
+        {
+          "id": "jimmy-iron",
+          "name": "Iron 22mg",
+          "dosesPerDay": 1,
+          "doseTimes": ["20:00"]
+        }
+      ],
+      "feedSchedules": [
+        {
+          "id": "jimmy-feed",
+          "name": "Formula",
+          "defaultAmount": 70,
+          "times": ["00:00", "03:00", "06:00", "09:00", "12:00", "15:00", "18:00", "21:00"]
+        }
+      ]
+    }
+  ]
+}

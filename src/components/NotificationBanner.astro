@@ -1,0 +1,38 @@
+---
+// Notification banner component
+---
+
+<div 
+  id="notification-banner"
+  class="notification-banner hidden fixed top-0 left-0 right-0 bg-gradient-to-r from-urgent to-red-600 text-white px-5 py-3 z-[900] animate-slide-down"
+>
+  <div class="flex items-center gap-4 flex-1">
+    <span class="text-2xl animate-bounce-icon">⏰</span>
+    <div>
+      <div id="notification-text" class="text-[15px] font-semibold">Items need attention!</div>
+      <div id="notification-items" class="text-[13px] opacity-90 mt-0.5"></div>
+    </div>
+  </div>
+  <button 
+    id="dismiss-btn"
+    class="bg-white/20 border-none text-white px-4 py-2 rounded-lg text-[13px] font-semibold cursor-pointer hover:bg-white/30 active:bg-white/30"
+  >
+    Dismiss
+  </button>
+</div>
+
+<style>
+  .notification-banner {
+    display: none;
+  }
+  
+  .notification-banner.active {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .notification-banner.warning {
+    background: linear-gradient(to right, #f59e0b, #d97706);
+  }
+</style>

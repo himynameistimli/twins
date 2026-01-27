@@ -1,0 +1,195 @@
+---
+import Layout from '../layouts/Layout.astro';
+import NotificationBanner from '../components/NotificationBanner.astro';
+import ChildPanel from '../components/ChildPanel.astro';
+import Modals from '../components/Modals.astro';
+---
+
+<Layout title="Twins Tracker">
+  <NotificationBanner />
+  
+  <div class="container flex h-full w-full min-w-full transition-[padding-top] duration-300">
+    <ChildPanel side="left" childIndex={0} defaultName="Emily" />
+    <ChildPanel side="right" childIndex={1} defaultName="Jimmy" />
+  </div>
+  
+  <Modals />
+</Layout>
+
+<style is:global>
+  /* Container notification state */
+  .container.has-notification {
+    padding-top: 60px;
+  }
+
+  /* Med buttons (dynamically rendered) */
+  .med-btn {
+    @apply flex flex-col items-center justify-center p-2 border-none rounded-lg cursor-pointer transition-all min-h-[60px];
+  }
+
+  .med-btn:active {
+    @apply scale-95;
+  }
+
+  .med-btn.urgent {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    @apply animate-pulse-urgent;
+  }
+
+  .med-btn.soon {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+  }
+
+  .med-btn.normal {
+    background: linear-gradient(135deg, #22c55e, #16a34a);
+  }
+
+  .med-btn.done {
+    @apply bg-done opacity-60;
+  }
+
+  .med-btn.add-new {
+    @apply bg-transparent border-2 border-dashed border-border;
+  }
+
+  .med-btn.add-new:hover,
+  .med-btn.add-new:active {
+    @apply border-normal;
+  }
+
+  .med-btn.add-new .med-name {
+    @apply text-gray-400;
+  }
+
+  .med-btn.add-new .med-status {
+    @apply text-gray-400 text-[10px];
+  }
+
+  .med-name {
+    @apply font-bold text-white text-center leading-tight;
+  }
+
+  .med-status {
+    @apply text-[10px] text-white/85 mt-0.5;
+  }
+
+  .med-time {
+    @apply text-[9px] text-white/70;
+  }
+
+  /* Item list in modals (dynamically rendered) */
+  .item-list-item {
+    @apply flex justify-between items-center p-3 bg-card rounded-lg mb-2;
+  }
+
+  .item-list-item .info {
+    @apply flex-1;
+  }
+
+  .item-list-item .name {
+    @apply font-semibold mb-0.5;
+  }
+
+  .item-list-item .details {
+    @apply text-xs text-gray-400;
+  }
+
+  .item-list-item button {
+    @apply bg-urgent text-white border-none px-3 py-1.5 rounded-md cursor-pointer text-xs;
+  }
+
+  /* Feed wheel touch feedback */
+  .feed-wheel button:active {
+    @apply scale-95;
+  }
+
+  .feed-wheel-main:active {
+    @apply bg-normal/30;
+  }
+
+  /* Date navigation */
+  .date-nav {
+    @apply select-none;
+  }
+
+  .date-nav-btn {
+    @apply rounded-md active:scale-90 transition-all;
+  }
+
+  .date-nav-btn:disabled {
+    @apply pointer-events-none;
+  }
+
+  /* Past date viewing indicator */
+  .container.viewing-past {
+    @apply relative;
+  }
+
+  .container.viewing-past::before {
+    content: '';
+    @apply absolute inset-0 pointer-events-none z-50;
+    background: linear-gradient(180deg, rgba(245, 158, 11, 0.05) 0%, transparent 100px);
+  }
+
+  /* Draggable events */
+  .planner-event[data-draggable="true"] {
+    @apply select-none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: none;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .planner-event[data-draggable="true"] * {
+    @apply select-none;
+    -webkit-user-select: none;
+    pointer-events: none;
+  }
+
+  .planner-event[data-draggable="true"]:active {
+    @apply cursor-grabbing;
+  }
+
+  .planner-event.dragging {
+    @apply cursor-grabbing z-50;
+    transform: scale(1.02);
+    box-shadow: 0 0 20px rgba(99, 102, 241, 0.5);
+    animation: pulse-drag 1s infinite;
+  }
+
+  @keyframes pulse-drag {
+    0%, 100% { 
+      box-shadow: 0 0 15px rgba(99, 102, 241, 0.4); 
+    }
+    50% { 
+      box-shadow: 0 0 25px rgba(99, 102, 241, 0.7); 
+    }
+  }
+
+  /* Disable pointer events on other elements while dragging */
+  body.dragging-event .planner-event:not(.dragging) {
+    @apply pointer-events-none opacity-50;
+  }
+
+  body.dragging-event .planner-viewport {
+    overflow: hidden !important;
+  }
+
+  /* Prevent any text selection while dragging */
+  body.dragging-event {
+    @apply select-none;
+    -webkit-user-select: none;
+    cursor: grabbing !important;
+  }
+
+  body.dragging-event * {
+    cursor: grabbing !important;
+  }
+</style>
+
+<script>
+  import { init } from '../scripts/tracker';
+  
+  document.addEventListener('DOMContentLoaded', init);
+</script>

@@ -1,0 +1,193 @@
+---
+interface Props {
+  side: 'left' | 'right';
+  childIndex: number;
+  defaultName: string;
+}
+
+const { side, childIndex, defaultName } = Astro.props;
+const isLeft = side === 'left';
+---
+
+<div 
+  class:list={[
+    'child-panel flex-1 flex flex-col p-4 overflow-hidden min-w-0',
+    { 'border-r-2 border-border': isLeft }
+  ]}
+  data-child={childIndex}
+>
+  <!-- Header -->
+  <div class="flex justify-between items-center mb-2">
+    <h1 
+      class:list={[
+        'text-2xl font-bold cursor-pointer',
+        isLeft ? 'text-accent-left' : 'text-accent-right'
+      ]}
+      data-child-name={childIndex}
+    >
+      {defaultName}
+    </h1>
+    <span class="date-display text-sm text-gray-400"></span>
+  </div>
+  
+  <!-- Daily Planner (Top Section - ~60% height) -->
+  <div class="planner-container flex-1 bg-panel rounded-xl mb-3 overflow-hidden min-h-0">
+    <div 
+      class="planner-viewport h-full overflow-auto"
+      id={`planner-${childIndex}`}
+      data-child={childIndex}
+    >
+      <div class="planner-content" id={`planner-content-${childIndex}`}>
+        <!-- Timeline will be rendered here -->
+      </div>
+    </div>
+  </div>
+  
+  <!-- Bottom Controls Section -->
+  <div class="controls-section flex flex-col gap-2 flex-shrink-0 max-h-[50%] min-h-[200px]">
+    <!-- Meds Row -->
+    <div class="bg-panel rounded-xl p-3 flex-1 overflow-hidden flex flex-col min-h-0">
+      <div class="flex justify-between items-center mb-2">
+        <span class="text-xs font-semibold text-gray-400 uppercase tracking-wide">Medications</span>
+        <button 
+          class="bg-card border border-dashed border-border text-gray-400 px-2 py-1 rounded text-xs font-semibold cursor-pointer transition-all hover:border-normal hover:text-normal"
+          data-action="open-med-settings" 
+          data-child={childIndex}
+        >
+          +
+        </button>
+      </div>
+      <div id={`meds-grid-${childIndex}`} class="grid grid-cols-3 gap-2 overflow-y-auto flex-1"></div>
+    </div>
+    
+    <!-- Feed & Diapers Row -->
+    <div class="bg-panel rounded-xl p-3 flex-shrink-0">
+      <div class="flex gap-2">
+        <!-- Feed control with swipe -->
+        <div 
+          class="feed-control flex items-center bg-card border border-border rounded-lg overflow-hidden cursor-pointer select-none"
+          id={`feed-control-${childIndex}`}
+        >
+          <div class="feed-icon w-10 h-12 flex items-center justify-center text-lg border-r border-border/50">
+            🍼
+          </div>
+          <div 
+            class="feed-swipe-area h-12 px-4 flex items-center justify-center gap-1 min-w-[70px]"
+            id={`feed-swipe-${childIndex}`}
+          >
+            <span class="text-base font-bold" id={`feed-amount-${childIndex}`}>120</span>
+            <span class="text-xs text-gray-400">mL</span>
+          </div>
+        </div>
+        
+        <!-- Diaper buttons -->
+        <button 
+          class="flex-1 py-3 border border-border rounded-lg text-base font-semibold cursor-pointer flex items-center justify-center gap-2 bg-card text-white active:scale-95 transition-all"
+          data-action="log-diaper" 
+          data-child={childIndex} 
+          data-type="pee"
+        >
+          💧 <span id={`pee-count-${childIndex}`}>0</span>
+        </button>
+        <button 
+          class="flex-1 py-3 border border-border rounded-lg text-base font-semibold cursor-pointer flex items-center justify-center gap-2 bg-card text-white active:scale-95 transition-all"
+          data-action="log-diaper" 
+          data-child={childIndex} 
+          data-type="poop"
+        >
+          💩 <span id={`poop-count-${childIndex}`}>0</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .child-panel.has-urgent {
+    animation: glow 2s infinite;
+  }
+  
+  @keyframes glow {
+    0%, 100% { background: transparent; }
+    50% { background: rgba(239, 68, 68, 0.05); }
+  }
+  
+  .planner-viewport {
+    scrollbar-width: thin;
+    scrollbar-color: #2a3a5a transparent;
+    touch-action: pan-y;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  .planner-content {
+    will-change: transform;
+    transform-origin: top left;
+  }
+  
+  /* Enable GPU acceleration for text elements during zoom */
+  .planner-content .planner-text,
+  .planner-content .planner-event {
+    transform-origin: left center;
+    will-change: transform;
+  }
+  
+  .planner-viewport::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  
+  .planner-viewport::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  .planner-viewport::-webkit-scrollbar-thumb {
+    background: #2a3a5a;
+    border-radius: 3px;
+  }
+  
+  /* Feed control swipe styles */
+  .feed-control {
+    touch-action: pan-x;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  
+  .feed-control:active {
+    background: rgba(255, 255, 255, 0.05);
+  }
+  
+  .feed-swipe-area {
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .feed-swipe-area::before {
+    content: '−';
+    position: absolute;
+    left: -20px;
+    opacity: 0;
+    color: #ef4444;
+    font-weight: bold;
+    transition: opacity 0.15s, left 0.15s;
+  }
+  
+  .feed-swipe-area::after {
+    content: '+';
+    position: absolute;
+    right: -20px;
+    opacity: 0;
+    color: #22c55e;
+    font-weight: bold;
+    transition: opacity 0.15s, right 0.15s;
+  }
+  
+  .feed-control.swiping-left .feed-swipe-area::before {
+    opacity: 1;
+    left: 4px;
+  }
+  
+  .feed-control.swiping-right .feed-swipe-area::after {
+    opacity: 1;
+    right: 4px;
+  }
+</style>
