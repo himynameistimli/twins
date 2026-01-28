@@ -2854,9 +2854,13 @@ function updateDisplay() {
   
   const viewingToday = isViewingToday();
   
+  // Update names using the data-child-name attribute, not DOM order
+  document.querySelectorAll('[data-child-name]').forEach(el => {
+    const childIndex = parseInt(el.getAttribute('data-child-name') || '0');
+    el.textContent = data.children[childIndex].name;
+  });
+  
   for (let i = 0; i < 2; i++) {
-    const nameEl = document.querySelectorAll('[data-child-name]')[i];
-    if (nameEl) nameEl.textContent = data.children[i].name;
     renderPlanner(i);
     renderMeds(i);
     updateDiaperCount(i);
