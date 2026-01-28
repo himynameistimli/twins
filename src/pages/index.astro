@@ -10,13 +10,13 @@ import Modals from '../components/Modals.astro';
   
   <!-- Mobile Integrated Header (phones only) - tabs built into header -->
   <div class="mobile-header sm:hidden">
-    <button class="mobile-name-tab active" data-tab="0" id="mobile-tab-0">
-      <span class="name-text" data-tab-name="0">Emily</span>
+    <button class="mobile-name-tab active" data-tab="1" id="mobile-tab-1">
+      <span class="name-text" data-tab-name="1">Jimmy</span>
       <span class="urgent-dot"></span>
     </button>
     <span class="header-divider">|</span>
-    <button class="mobile-name-tab" data-tab="1" id="mobile-tab-1">
-      <span class="name-text" data-tab-name="1">Jimmy</span>
+    <button class="mobile-name-tab" data-tab="0" id="mobile-tab-0">
+      <span class="name-text" data-tab-name="0">Emily</span>
       <span class="urgent-dot"></span>
     </button>
     <div class="header-date">
@@ -25,8 +25,8 @@ import Modals from '../components/Modals.astro';
   </div>
   
   <div class="panels-container flex h-screen w-screen transition-[padding-top] duration-300 sm:flex-row">
-    <ChildPanel side="left" childIndex={0} defaultName="Emily" />
-    <ChildPanel side="right" childIndex={1} defaultName="Jimmy" />
+    <ChildPanel side="left" childIndex={1} defaultName="Jimmy" />
+    <ChildPanel side="right" childIndex={0} defaultName="Emily" />
   </div>
   
   <Modals />
@@ -105,20 +105,20 @@ import Modals from '../components/Modals.astro';
       transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
     
-    .child-panel[data-child="0"] {
-      transform: translateX(0);
-    }
-    
     .child-panel[data-child="1"] {
       transform: translateX(0);
     }
     
-    /* When viewing second child */
-    .panels-container.show-child-1 .child-panel[data-child="0"] {
+    .child-panel[data-child="0"] {
+      transform: translateX(0);
+    }
+    
+    /* When viewing Emily (second panel on mobile) */
+    .panels-container.show-child-0 .child-panel[data-child="1"] {
       transform: translateX(-100%);
     }
     
-    .panels-container.show-child-1 .child-panel[data-child="1"] {
+    .panels-container.show-child-0 .child-panel[data-child="0"] {
       transform: translateX(-100%);
     }
     
@@ -435,8 +435,8 @@ import Modals from '../components/Modals.astro';
   
   document.addEventListener('DOMContentLoaded', init);
   
-  // Mobile tab switching
-  let currentMobileChild = 0;
+  // Mobile tab switching (Jimmy is first/default on mobile)
+  let currentMobileChild = 1;
   
   function switchToChild(childIndex: number) {
     const tabs = document.querySelectorAll('.mobile-name-tab');
@@ -451,11 +451,11 @@ import Modals from '../components/Modals.astro';
     tabs.forEach(t => t.classList.remove('active'));
     tabs[childIndex]?.classList.add('active');
     
-    // Switch panel
-    if (childIndex === 1) {
-      panelsContainer?.classList.add('show-child-1');
+    // Switch panel (Jimmy=1 is first, Emily=0 is second on mobile)
+    if (childIndex === 0) {
+      panelsContainer?.classList.add('show-child-0');
     } else {
-      panelsContainer?.classList.remove('show-child-1');
+      panelsContainer?.classList.remove('show-child-0');
     }
     
     // Haptic feedback
@@ -556,12 +556,12 @@ import Modals from '../components/Modals.astro';
       const deltaX = touchEndX - touchStartX;
       
       if (Math.abs(deltaX) > SWIPE_THRESHOLD) {
-        if (deltaX < 0 && currentMobileChild === 0) {
-          // Swipe left: show child 1
-          switchToChild(1);
-        } else if (deltaX > 0 && currentMobileChild === 1) {
-          // Swipe right: show child 0
+        if (deltaX < 0 && currentMobileChild === 1) {
+          // Swipe left: show Emily (child 0)
           switchToChild(0);
+        } else if (deltaX > 0 && currentMobileChild === 0) {
+          // Swipe right: show Jimmy (child 1)
+          switchToChild(1);
         }
       }
       
