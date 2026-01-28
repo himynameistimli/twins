@@ -59,11 +59,12 @@ import Modals from '../components/Modals.astro';
     @apply opacity-100;
   }
   
-  .mobile-name-tab[data-tab="0"] .name-text {
+  /* Jimmy (data-tab="1") is now on the left, Emily (data-tab="0") on the right */
+  .mobile-name-tab[data-tab="1"] .name-text {
     @apply text-accent-left;
   }
   
-  .mobile-name-tab[data-tab="1"] .name-text {
+  .mobile-name-tab[data-tab="0"] .name-text {
     @apply text-accent-right;
   }
   

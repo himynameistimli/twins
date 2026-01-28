@@ -100,8 +100,10 @@ const isLeft = side === 'left';
             class="feed-swipe-area flex-1 h-14 px-4 flex items-center justify-center gap-2"
             id={`feed-swipe-${childIndex}`}
           >
+            <span class="feed-arrow feed-arrow-left">◀</span>
             <span class="text-xl font-bold" id={`feed-amount-${childIndex}`}>120</span>
             <span class="text-sm text-gray-400">mL</span>
+            <span class="feed-arrow feed-arrow-right">▶</span>
           </div>
         </div>
         
@@ -208,7 +210,7 @@ const isLeft = side === 'left';
     .planner-container {
       flex: 1 1 0;
       min-height: 120px;
-      max-height: 35vh;
+      /* max-height: 35vh; */
     }
     
     .controls-section {
@@ -324,5 +326,34 @@ const isLeft = side === 'left';
   .feed-control.swiping-right .feed-swipe-area::after {
     opacity: 1;
     right: 4px;
+  }
+  
+  /* Feed arrows for visual affordance */
+  .feed-arrow {
+    font-size: 0.65rem;
+    color: rgba(148, 163, 184, 0.5);
+    transition: all 0.15s ease;
+  }
+  
+  .feed-arrow-left {
+    margin-right: 0.5rem;
+  }
+  
+  .feed-arrow-right {
+    margin-left: 0.5rem;
+  }
+  
+  .feed-control:hover .feed-arrow {
+    color: rgba(148, 163, 184, 0.8);
+  }
+  
+  .feed-control.swiping-left .feed-arrow-left {
+    color: #ef4444;
+    transform: translateX(-2px);
+  }
+  
+  .feed-control.swiping-right .feed-arrow-right {
+    color: #22c55e;
+    transform: translateX(2px);
   }
 </style>
