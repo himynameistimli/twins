@@ -137,6 +137,22 @@ const isLeft = side === 'left';
     50% { background: rgba(239, 68, 68, 0.05); }
   }
   
+  /* Mobile phone: reduce padding to maximize space */
+  @media (max-width: 639px) {
+    .child-panel {
+      padding: 0.5rem !important;
+      padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px)) !important;
+    }
+    
+    .child-panel .mb-2 {
+      margin-bottom: 0.25rem;
+    }
+    
+    .child-panel .mb-3 {
+      margin-bottom: 0.375rem;
+    }
+  }
+  
   /* Sync status indicator */
   .sync-status {
     @apply text-xs px-2 py-0.5 rounded-full flex items-center gap-1 transition-all duration-300;
@@ -180,6 +196,45 @@ const isLeft = side === 'left';
   
   .meds-grid.edit-mode {
     overflow: visible;
+  }
+  
+  /* Mobile phone adjustments - shrink meds and planner to fit controls */
+  @media (max-width: 639px) {
+    .meds-wrapper {
+      height: 140px !important;
+    }
+    
+    .meds-wrapper .meds-grid {
+      grid-template-columns: repeat(3, 1fr);
+    }
+    
+    .planner-container {
+      flex: 1 1 0;
+      min-height: 120px;
+      max-height: 35vh;
+    }
+    
+    .controls-section {
+      gap: 0.375rem;
+    }
+    
+    .controls-section .bg-panel {
+      padding: 0.5rem;
+    }
+    
+    .feed-icon {
+      width: 2.5rem !important;
+      height: 3rem !important;
+    }
+    
+    .feed-swipe-area {
+      height: 3rem !important;
+    }
+    
+    .controls-section button[data-action="log-diaper"] {
+      width: 3.5rem !important;
+      height: 3rem !important;
+    }
   }
   
   /* On larger screens, show more columns */
