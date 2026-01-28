@@ -8,7 +8,21 @@ import Modals from '../components/Modals.astro';
 <Layout title="Twins Tracker">
   <NotificationBanner />
   
-  <div class="flex h-screen w-screen transition-[padding-top] duration-300">
+  <!-- Mobile Tab Bar (phones only, hidden on tablet+) -->
+  <div class="mobile-tab-bar sm:hidden">
+    <button class="mobile-tab active" data-tab="0" id="mobile-tab-0">
+      <span class="tab-name" data-tab-name="0">Emily</span>
+      <span class="tab-indicator"></span>
+      <span class="urgent-dot"></span>
+    </button>
+    <button class="mobile-tab" data-tab="1" id="mobile-tab-1">
+      <span class="tab-name" data-tab-name="1">Jimmy</span>
+      <span class="tab-indicator"></span>
+      <span class="urgent-dot"></span>
+    </button>
+  </div>
+  
+  <div class="panels-container flex h-screen w-screen transition-[padding-top] duration-300 sm:flex-row">
     <ChildPanel side="left" childIndex={0} defaultName="Emily" />
     <ChildPanel side="right" childIndex={1} defaultName="Jimmy" />
   </div>
@@ -17,6 +31,120 @@ import Modals from '../components/Modals.astro';
 </Layout>
 
 <style is:global>
+  /* Mobile Tab Bar - only visible on phones */
+  .mobile-tab-bar {
+    @apply fixed top-0 left-0 right-0 z-50 flex bg-panel border-b border-border;
+    height: 52px;
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  
+  /* Ensure tab bar is hidden on tablet and larger */
+  @media (min-width: 640px) {
+    .mobile-tab-bar {
+      display: none !important;
+    }
+  }
+  
+  .mobile-tab {
+    @apply flex-1 flex flex-col items-center justify-center relative bg-transparent border-none text-white cursor-pointer transition-all;
+  }
+  
+  .mobile-tab .tab-name {
+    @apply text-sm font-semibold opacity-60 transition-all;
+  }
+  
+  .mobile-tab.active .tab-name {
+    @apply opacity-100;
+  }
+  
+  .mobile-tab[data-tab="0"] .tab-name {
+    @apply text-accent-left;
+  }
+  
+  .mobile-tab[data-tab="1"] .tab-name {
+    @apply text-accent-right;
+  }
+  
+  .mobile-tab .tab-indicator {
+    @apply absolute bottom-0 left-1/4 right-1/4 h-0.5 rounded-full opacity-0 transition-all;
+  }
+  
+  .mobile-tab.active .tab-indicator {
+    @apply opacity-100;
+  }
+  
+  .mobile-tab[data-tab="0"] .tab-indicator {
+    @apply bg-accent-left;
+  }
+  
+  .mobile-tab[data-tab="1"] .tab-indicator {
+    @apply bg-accent-right;
+  }
+  
+  /* Urgent notification dot on tab */
+  .mobile-tab .urgent-dot {
+    @apply absolute top-2 right-1/4 w-2 h-2 bg-urgent rounded-full opacity-0 transition-opacity;
+    animation: pulse-urgent 1.5s infinite;
+  }
+  
+  .mobile-tab.has-urgent .urgent-dot {
+    @apply opacity-100;
+  }
+  
+  /* Smaller header on mobile phones (shown in tabs) */
+  @media (max-width: 639px) {
+    .child-panel h1[data-child-name] {
+      @apply text-lg;
+    }
+  }
+  
+  /* Mobile phone panels behavior (tabs + single panel view) */
+  @media (max-width: 639px) {
+    .panels-container {
+      padding-top: calc(52px + env(safe-area-inset-top, 0px));
+      flex-direction: row;
+      overflow: hidden;
+    }
+    
+    .child-panel {
+      @apply w-full flex-shrink-0;
+      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    .child-panel[data-child="0"] {
+      transform: translateX(0);
+    }
+    
+    .child-panel[data-child="1"] {
+      transform: translateX(0);
+    }
+    
+    /* When viewing second child */
+    .panels-container.show-child-1 .child-panel[data-child="0"] {
+      transform: translateX(-100%);
+    }
+    
+    .panels-container.show-child-1 .child-panel[data-child="1"] {
+      transform: translateX(-100%);
+    }
+    
+    /* Hide the border on mobile since panels are full width */
+    .child-panel.border-r-2 {
+      @apply border-r-0;
+    }
+  }
+  
+  /* Tablet and larger: side-by-side layout */
+  @media (min-width: 640px) {
+    .panels-container {
+      padding-top: 0;
+    }
+    
+    .child-panel {
+      @apply w-1/2;
+    }
+  }
+  
   /* Container notification state */
   .container.has-notification {
     padding-top: 60px;
@@ -312,4 +440,141 @@ import Modals from '../components/Modals.astro';
   import { init } from '../scripts/tracker';
   
   document.addEventListener('DOMContentLoaded', init);
+  
+  // Mobile tab switching
+  let currentMobileChild = 0;
+  
+  function switchToChild(childIndex: number) {
+    const tabs = document.querySelectorAll('.mobile-tab');
+    const panelsContainer = document.querySelector('.panels-container');
+    
+    if (childIndex < 0 || childIndex > 1) return;
+    if (childIndex === currentMobileChild) return;
+    
+    currentMobileChild = childIndex;
+    
+    // Update active tab
+    tabs.forEach(t => t.classList.remove('active'));
+    tabs[childIndex]?.classList.add('active');
+    
+    // Switch panel
+    if (childIndex === 1) {
+      panelsContainer?.classList.add('show-child-1');
+    } else {
+      panelsContainer?.classList.remove('show-child-1');
+    }
+    
+    // Haptic feedback
+    if ('vibrate' in navigator) {
+      navigator.vibrate(10);
+    }
+  }
+  
+  function setupMobileTabs() {
+    const tabs = document.querySelectorAll('.mobile-tab');
+    const panelsContainer = document.querySelector('.panels-container');
+    
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        const childIndex = parseInt(tab.getAttribute('data-tab') || '0');
+        switchToChild(childIndex);
+      });
+    });
+    
+    // Update tab names when child names change
+    const nameObserver = new MutationObserver(() => {
+      document.querySelectorAll('[data-child-name]').forEach((el, i) => {
+        const tabName = document.querySelector(`[data-tab-name="${i}"]`);
+        if (tabName && el.textContent) {
+          tabName.textContent = el.textContent;
+        }
+      });
+    });
+    
+    document.querySelectorAll('[data-child-name]').forEach(el => {
+      nameObserver.observe(el, { childList: true, characterData: true, subtree: true });
+    });
+    
+    // Sync urgent status from panels to mobile tabs
+    const urgentObserver = new MutationObserver(() => {
+      document.querySelectorAll('.child-panel').forEach((panel) => {
+        const childIndex = panel.getAttribute('data-child');
+        const tab = document.getElementById(`mobile-tab-${childIndex}`);
+        if (tab) {
+          if (panel.classList.contains('has-urgent')) {
+            tab.classList.add('has-urgent');
+          } else {
+            tab.classList.remove('has-urgent');
+          }
+        }
+      });
+    });
+    
+    document.querySelectorAll('.child-panel').forEach(panel => {
+      urgentObserver.observe(panel, { attributes: true, attributeFilter: ['class'] });
+    });
+    
+    // Swipe gesture support for mobile tab switching
+    setupMobileSwipe(panelsContainer);
+  }
+  
+  function setupMobileSwipe(container: Element | null) {
+    if (!container) return;
+    
+    // Only enable on mobile phones (< 640px, matching Tailwind's sm breakpoint)
+    const isMobile = () => window.innerWidth < 640;
+    
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let touchEndX = 0;
+    let isSwiping = false;
+    
+    const SWIPE_THRESHOLD = 60;
+    const VERTICAL_THRESHOLD = 50;
+    
+    container.addEventListener('touchstart', (e: Event) => {
+      if (!isMobile()) return;
+      
+      const touch = (e as TouchEvent).touches[0];
+      touchStartX = touch.clientX;
+      touchStartY = touch.clientY;
+      touchEndX = touchStartX;
+      isSwiping = true;
+    }, { passive: true });
+    
+    container.addEventListener('touchmove', (e: Event) => {
+      if (!isSwiping || !isMobile()) return;
+      
+      const touch = (e as TouchEvent).touches[0];
+      touchEndX = touch.clientX;
+      
+      // Cancel if scrolling vertically
+      const deltaY = Math.abs(touch.clientY - touchStartY);
+      if (deltaY > VERTICAL_THRESHOLD) {
+        isSwiping = false;
+      }
+    }, { passive: true });
+    
+    container.addEventListener('touchend', () => {
+      if (!isSwiping || !isMobile()) return;
+      isSwiping = false;
+      
+      const deltaX = touchEndX - touchStartX;
+      
+      if (Math.abs(deltaX) > SWIPE_THRESHOLD) {
+        if (deltaX < 0 && currentMobileChild === 0) {
+          // Swipe left: show child 1
+          switchToChild(1);
+        } else if (deltaX > 0 && currentMobileChild === 1) {
+          // Swipe right: show child 0
+          switchToChild(0);
+        }
+      }
+      
+      touchStartX = 0;
+      touchEndX = 0;
+    }, { passive: true });
+  }
+  
+  document.addEventListener('DOMContentLoaded', setupMobileTabs);
 </script>
