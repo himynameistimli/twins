@@ -1,4 +1,6 @@
 {
+  "calendarId": "4799571a12fdda63de9f9efd62433526a0934be668b9bc46ad9dce69b6c6c878@group.calendar.google.com",
+  "calendarUrl": "https://calendar.google.com/calendar/ical/4799571a12fdda63de9f9efd62433526a0934be668b9bc46ad9dce69b6c6c878%40group.calendar.google.com/private-a1fc064f45d75e1507e7a07ab14ff9b5/basic.ics",
   "children": [
     {
       "name": "Emily",
@@ -23,13 +25,13 @@
         },
         {
           "id": "jimmy-digoxin",
-          "name": "Digoxin 12.6mcg",
+          "name": "Digoxin 12.5mcg",
           "dosesPerDay": 1,
           "doseTimes": ["08:00"]
         },
         {
           "id": "jimmy-furosemide",
-          "name": "Furosemide 5mg",
+          "name": "Furosemide (Lasix) 5mg",
           "dosesPerDay": 2,
           "doseTimes": ["08:00", "20:00"]
         },

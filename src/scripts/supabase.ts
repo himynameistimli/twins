@@ -1,18 +1,20 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL;
-const supabaseKey = import.meta.env.PUBLIC_SUPABASE_KEY;
+const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL || '';
+const supabaseKey = import.meta.env.PUBLIC_SUPABASE_KEY || '';
 
-export const supabase = createClient(supabaseUrl, supabaseKey);
-
-// Device ID for identifying this tracker instance
-function getDeviceId(): string {
-  let deviceId = localStorage.getItem('twinsTracker_deviceId');
-  if (!deviceId) {
-    deviceId = 'device_' + Date.now() + '_' + Math.random().toString(36).substring(2, 15);
-    localStorage.setItem('twinsTracker_deviceId', deviceId);
+// Create a mock client if credentials are missing
+function createSupabaseClient(): SupabaseClient | null {
+  if (!supabaseUrl || !supabaseKey) {
+    console.warn('Supabase credentials not configured - using local storage only');
+    return null;
   }
-  return deviceId;
+  console.log('Supabase connected:', supabaseUrl);
+  return createClient(supabaseUrl, supabaseKey);
 }
 
-export const deviceId = getDeviceId();
+export const supabase = createSupabaseClient();
+
+// Shared ID for syncing across all devices
+// Use a fixed ID so all browsers share the same data
+export const deviceId = 'twins_tracker_shared';

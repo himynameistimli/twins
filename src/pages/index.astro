@@ -8,7 +8,7 @@ import Modals from '../components/Modals.astro';
 <Layout title="Twins Tracker">
   <NotificationBanner />
   
-  <div class="container flex h-full w-full min-w-full transition-[padding-top] duration-300">
+  <div class="flex h-screen w-screen transition-[padding-top] duration-300">
     <ChildPanel side="left" childIndex={0} defaultName="Emily" />
     <ChildPanel side="right" childIndex={1} defaultName="Jimmy" />
   </div>
@@ -22,9 +22,10 @@ import Modals from '../components/Modals.astro';
     padding-top: 60px;
   }
 
-  /* Med buttons (dynamically rendered) */
+  /* Med buttons (dynamically rendered) - fixed size */
   .med-btn {
-    @apply flex flex-col items-center justify-center p-2 border-none rounded-lg cursor-pointer transition-all min-h-[60px];
+    @apply flex flex-col items-center justify-center p-2 border-none rounded-lg cursor-pointer transition-all overflow-hidden;
+    min-height: 68px;
   }
 
   .med-btn:active {
@@ -32,20 +33,20 @@ import Modals from '../components/Modals.astro';
   }
 
   .med-btn.urgent {
-    background: linear-gradient(135deg, #ef4444, #dc2626);
+    background: linear-gradient(135deg, #b91c1c, #991b1b);
     @apply animate-pulse-urgent;
   }
 
   .med-btn.soon {
-    background: linear-gradient(135deg, #f59e0b, #d97706);
+    @apply bg-card border border-border;
   }
 
   .med-btn.normal {
-    background: linear-gradient(135deg, #22c55e, #16a34a);
+    @apply bg-card border border-border;
   }
 
   .med-btn.done {
-    @apply bg-done opacity-60;
+    @apply bg-card border border-border opacity-50;
   }
 
   .med-btn.add-new {
@@ -66,15 +67,134 @@ import Modals from '../components/Modals.astro';
   }
 
   .med-name {
-    @apply font-bold text-white text-center leading-tight;
+    @apply font-bold text-white text-center leading-tight text-sm w-full px-0.5;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .med-status {
-    @apply text-[10px] text-white/85 mt-0.5;
+    @apply text-xs text-white/85 mt-0.5 w-full text-center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .med-time {
-    @apply text-[9px] text-white/70;
+    @apply text-[11px] text-white/70;
+  }
+
+  /* Edit mode - iOS-style jiggle animation */
+  @keyframes jiggle {
+    0%, 100% { transform: rotate(-0.5deg); }
+    50% { transform: rotate(0.5deg); }
+  }
+
+  .meds-grid.edit-mode {
+    overflow: visible !important;
+  }
+
+  .meds-grid.edit-mode .med-btn {
+    animation: jiggle 0.25s ease-in-out infinite;
+    position: relative;
+    overflow: visible;
+  }
+
+  .meds-grid.edit-mode .med-btn:nth-child(even) {
+    animation-delay: 0.125s;
+  }
+
+  .meds-grid.edit-mode .med-btn:nth-child(3n) {
+    animation-duration: 0.3s;
+  }
+
+  .meds-grid.edit-mode .med-btn.add-new {
+    animation: none;
+    display: none;
+  }
+
+  /* X delete button - partially outside top-right corner */
+  .med-delete-btn {
+    @apply absolute w-5 h-5 bg-urgent rounded-full flex items-center justify-center text-white text-[10px] font-bold z-30 opacity-0 pointer-events-none transition-all border-none cursor-pointer;
+    top: -6px;
+    right: -6px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .meds-grid.edit-mode .med-delete-btn {
+    @apply opacity-100 pointer-events-auto;
+  }
+
+  .med-delete-btn:hover {
+    @apply bg-red-500;
+  }
+
+  .med-delete-btn:active {
+    transform: scale(0.85);
+  }
+
+  /* Event edit mode - jiggle animation for planner events */
+  @keyframes jiggle-event {
+    0%, 100% { transform: rotate(-0.3deg); }
+    50% { transform: rotate(0.3deg); }
+  }
+
+  .jiggle-event {
+    animation: jiggle-event 0.25s ease-in-out infinite;
+    transform-origin: center center;
+    overflow: visible !important;
+  }
+
+  .jiggle-event:nth-child(even) {
+    animation-delay: 0.12s;
+  }
+
+  .jiggle-event:nth-child(3n) {
+    animation-duration: 0.3s;
+  }
+
+  /* Event delete button */
+  .event-delete-btn {
+    @apply w-4 h-4 bg-urgent rounded-full flex items-center justify-center text-white text-[9px] font-bold z-30 flex-shrink-0 ml-auto cursor-pointer;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .event-delete-btn:hover {
+    @apply bg-red-500;
+  }
+
+  .event-delete-btn:active {
+    transform: scale(0.85);
+  }
+
+  /* Planner container overflow in edit mode */
+  .event-edit-mode {
+    overflow: visible !important;
+  }
+
+  /* Event edit mode Done button */
+  .event-edit-done-btn {
+    @apply absolute top-2 right-2 px-3 py-1 bg-green-600 text-white text-xs font-semibold rounded-lg z-40 opacity-0 pointer-events-none transition-all;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+  }
+
+  .planner-container:has(.event-edit-mode) .event-edit-done-btn {
+    @apply opacity-100 pointer-events-auto;
+  }
+
+  .event-edit-done-btn:active {
+    transform: scale(0.95);
+  }
+
+  /* Done editing button */
+  .edit-done-btn {
+    @apply bg-normal text-white px-3 py-1 rounded text-xs font-semibold cursor-pointer transition-all;
+  }
+
+  .edit-done-btn:hover {
+    @apply bg-normal/80;
   }
 
   /* Item list in modals (dynamically rendered) */

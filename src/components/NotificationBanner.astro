@@ -1,38 +1,90 @@
 ---
-// Notification banner component
+// Notification banner component - now uses floating tooltips per child
+// The old full-width banner is replaced with per-panel tooltips
 ---
 
-<div 
-  id="notification-banner"
-  class="notification-banner hidden fixed top-0 left-0 right-0 bg-gradient-to-r from-urgent to-red-600 text-white px-5 py-3 z-[900] animate-slide-down"
->
-  <div class="flex items-center gap-4 flex-1">
-    <span class="text-2xl animate-bounce-icon">⏰</span>
-    <div>
-      <div id="notification-text" class="text-[15px] font-semibold">Items need attention!</div>
-      <div id="notification-items" class="text-[13px] opacity-90 mt-0.5"></div>
-    </div>
-  </div>
-  <button 
-    id="dismiss-btn"
-    class="bg-white/20 border-none text-white px-4 py-2 rounded-lg text-[13px] font-semibold cursor-pointer hover:bg-white/30 active:bg-white/30"
-  >
-    Dismiss
-  </button>
-</div>
+<!-- Hidden element to keep dismiss functionality working -->
+<div id="notification-banner" class="hidden"></div>
 
-<style>
-  .notification-banner {
+<style is:global>
+  /* Floating tooltip styles */
+  .urgent-tooltip {
+    position: absolute;
+    top: 50px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: linear-gradient(135deg, #991b1b, #7f1d1d);
+    color: white;
+    padding: 8px 16px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    z-index: 100;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
     display: none;
+    align-items: center;
+    gap: 8px;
+    animation: pulse-tooltip 2s infinite;
+    white-space: nowrap;
+    max-width: 90%;
   }
   
-  .notification-banner.active {
+  .urgent-tooltip.active {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
   }
-
-  .notification-banner.warning {
-    background: linear-gradient(to right, #f59e0b, #d97706);
+  
+  .urgent-tooltip.warning {
+    background: linear-gradient(135deg, #92400e, #78350f);
+  }
+  
+  .urgent-tooltip .tooltip-icon {
+    font-size: 14px;
+    animation: bounce-icon 1s infinite;
+  }
+  
+  .urgent-tooltip .tooltip-buttons {
+    display: flex;
+    gap: 6px;
+    margin-left: 8px;
+    flex-shrink: 0;
+  }
+  
+  .urgent-tooltip .tooltip-btn {
+    background: rgba(255, 255, 255, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    padding: 4px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 600;
+    transition: all 0.15s ease;
+  }
+  
+  .urgent-tooltip .tooltip-btn:hover {
+    background: rgba(255, 255, 255, 0.25);
+  }
+  
+  .urgent-tooltip .add-btn {
+    background: rgba(34, 197, 94, 0.3);
+    border-color: rgba(34, 197, 94, 0.5);
+  }
+  
+  .urgent-tooltip .add-btn:hover {
+    background: rgba(34, 197, 94, 0.5);
+  }
+  
+  @keyframes pulse-tooltip {
+    0%, 100% { 
+      box-shadow: 0 4px 20px rgba(153, 27, 27, 0.4);
+    }
+    50% { 
+      box-shadow: 0 4px 30px rgba(153, 27, 27, 0.7);
+    }
+  }
+  
+  @keyframes bounce-icon {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-2px); }
   }
 </style>
