@@ -26,8 +26,8 @@ const isLeft = side === 'left';
     </div>
   </div>
 
-  <!-- Header -->
-  <div class="flex justify-between items-center mb-2">
+  <!-- Header (hidden on mobile, shown on tablet+) -->
+  <div class="child-header flex justify-between items-center mb-2">
     <h1 
       class:list={[
         'text-2xl font-bold cursor-pointer',
@@ -200,10 +200,7 @@ const isLeft = side === 'left';
   
   /* Mobile phone adjustments - shrink meds and planner to fit controls */
   @media (max-width: 639px) {
-    .meds-wrapper {
-      height: 140px !important;
-    }
-    
+
     .meds-wrapper .meds-grid {
       grid-template-columns: repeat(3, 1fr);
     }

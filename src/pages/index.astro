@@ -8,18 +8,20 @@ import Modals from '../components/Modals.astro';
 <Layout title="Twins Tracker">
   <NotificationBanner />
   
-  <!-- Mobile Tab Bar (phones only, hidden on tablet+) -->
-  <div class="mobile-tab-bar sm:hidden">
-    <button class="mobile-tab active" data-tab="0" id="mobile-tab-0">
-      <span class="tab-name" data-tab-name="0">Emily</span>
-      <span class="tab-indicator"></span>
+  <!-- Mobile Integrated Header (phones only) - tabs built into header -->
+  <div class="mobile-header sm:hidden">
+    <button class="mobile-name-tab active" data-tab="0" id="mobile-tab-0">
+      <span class="name-text" data-tab-name="0">Emily</span>
       <span class="urgent-dot"></span>
     </button>
-    <button class="mobile-tab" data-tab="1" id="mobile-tab-1">
-      <span class="tab-name" data-tab-name="1">Jimmy</span>
-      <span class="tab-indicator"></span>
+    <span class="header-divider">|</span>
+    <button class="mobile-name-tab" data-tab="1" id="mobile-tab-1">
+      <span class="name-text" data-tab-name="1">Jimmy</span>
       <span class="urgent-dot"></span>
     </button>
+    <div class="header-date">
+      <span class="date-display text-xs text-gray-400"></span>
+    </div>
   </div>
   
   <div class="panels-container flex h-screen w-screen transition-[padding-top] duration-300 sm:flex-row">
@@ -31,77 +33,69 @@ import Modals from '../components/Modals.astro';
 </Layout>
 
 <style is:global>
-  /* Mobile Tab Bar - only visible on phones */
-  .mobile-tab-bar {
-    @apply fixed top-0 left-0 right-0 z-50 flex bg-panel border-b border-border;
-    height: 52px;
+  /* Mobile Integrated Header - compact name tabs */
+  .mobile-header {
+    @apply fixed top-0 left-0 right-0 z-50 flex items-center justify-center gap-1 bg-dark/95 backdrop-blur-sm;
+    height: 32px;
     padding-top: env(safe-area-inset-top, 0px);
   }
   
-  /* Ensure tab bar is hidden on tablet and larger */
+  /* Ensure header is hidden on tablet and larger */
   @media (min-width: 640px) {
-    .mobile-tab-bar {
+    .mobile-header {
       display: none !important;
     }
   }
   
-  .mobile-tab {
-    @apply flex-1 flex flex-col items-center justify-center relative bg-transparent border-none text-white cursor-pointer transition-all;
+  .mobile-name-tab {
+    @apply relative bg-transparent border-none cursor-pointer transition-all px-1;
   }
   
-  .mobile-tab .tab-name {
-    @apply text-sm font-semibold opacity-60 transition-all;
+  .mobile-name-tab .name-text {
+    @apply text-sm font-bold opacity-40 transition-all;
   }
   
-  .mobile-tab.active .tab-name {
+  .mobile-name-tab.active .name-text {
     @apply opacity-100;
   }
   
-  .mobile-tab[data-tab="0"] .tab-name {
+  .mobile-name-tab[data-tab="0"] .name-text {
     @apply text-accent-left;
   }
   
-  .mobile-tab[data-tab="1"] .tab-name {
+  .mobile-name-tab[data-tab="1"] .name-text {
     @apply text-accent-right;
   }
   
-  .mobile-tab .tab-indicator {
-    @apply absolute bottom-0 left-1/4 right-1/4 h-0.5 rounded-full opacity-0 transition-all;
+  .header-divider {
+    @apply text-gray-600 text-xs font-light;
   }
   
-  .mobile-tab.active .tab-indicator {
-    @apply opacity-100;
+  .header-date {
+    @apply absolute right-2;
   }
   
-  .mobile-tab[data-tab="0"] .tab-indicator {
-    @apply bg-accent-left;
-  }
-  
-  .mobile-tab[data-tab="1"] .tab-indicator {
-    @apply bg-accent-right;
-  }
-  
-  /* Urgent notification dot on tab */
-  .mobile-tab .urgent-dot {
-    @apply absolute top-2 right-1/4 w-2 h-2 bg-urgent rounded-full opacity-0 transition-opacity;
+  /* Urgent notification dot on name tab */
+  .mobile-name-tab .urgent-dot {
+    @apply absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-urgent rounded-full opacity-0 transition-opacity;
     animation: pulse-urgent 1.5s infinite;
   }
   
-  .mobile-tab.has-urgent .urgent-dot {
+  .mobile-name-tab.has-urgent .urgent-dot {
     @apply opacity-100;
   }
   
-  /* Smaller header on mobile phones (shown in tabs) */
+  /* Hide individual child headers on mobile (using integrated header) */
   @media (max-width: 639px) {
-    .child-panel h1[data-child-name] {
-      @apply text-lg;
+    .child-panel .child-header {
+      display: none !important;
     }
   }
   
   /* Mobile phone panels behavior (tabs + single panel view) */
   @media (max-width: 639px) {
     .panels-container {
-      padding-top: calc(52px + env(safe-area-inset-top, 0px));
+      padding-top: calc(32px + env(safe-area-inset-top, 0px));
       flex-direction: row;
       overflow: hidden;
     }
@@ -445,7 +439,7 @@ import Modals from '../components/Modals.astro';
   let currentMobileChild = 0;
   
   function switchToChild(childIndex: number) {
-    const tabs = document.querySelectorAll('.mobile-tab');
+    const tabs = document.querySelectorAll('.mobile-name-tab');
     const panelsContainer = document.querySelector('.panels-container');
     
     if (childIndex < 0 || childIndex > 1) return;
@@ -471,7 +465,7 @@ import Modals from '../components/Modals.astro';
   }
   
   function setupMobileTabs() {
-    const tabs = document.querySelectorAll('.mobile-tab');
+    const tabs = document.querySelectorAll('.mobile-name-tab');
     const panelsContainer = document.querySelector('.panels-container');
     
     tabs.forEach(tab => {
