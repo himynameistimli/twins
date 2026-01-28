@@ -35,8 +35,8 @@ import Modals from '../components/Modals.astro';
 <style is:global>
   /* Mobile Integrated Header - compact name tabs */
   .mobile-header {
-    @apply fixed top-0 left-0 right-0 z-50 flex items-center justify-center gap-1 bg-dark/95 backdrop-blur-sm;
-    height: 32px;
+    @apply fixed top-0 left-0 right-0 z-50 flex items-center justify-center gap-2 bg-dark/95 backdrop-blur-sm;
+    height: 40px;
     padding-top: env(safe-area-inset-top, 0px);
   }
   
@@ -52,7 +52,7 @@ import Modals from '../components/Modals.astro';
   }
   
   .mobile-name-tab .name-text {
-    @apply text-sm font-bold opacity-40 transition-all;
+    @apply text-lg font-bold opacity-40 transition-all;
   }
   
   .mobile-name-tab.active .name-text {
@@ -95,7 +95,7 @@ import Modals from '../components/Modals.astro';
   /* Mobile phone panels behavior (tabs + single panel view) */
   @media (max-width: 639px) {
     .panels-container {
-      padding-top: calc(32px + env(safe-area-inset-top, 0px));
+      padding-top: calc(40px + env(safe-area-inset-top, 0px));
       flex-direction: row;
       overflow: hidden;
     }
