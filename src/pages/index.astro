@@ -24,7 +24,7 @@ import Modals from '../components/Modals.astro';
     </div>
   </div>
   
-  <div class="panels-container flex h-screen w-screen transition-[padding-top] duration-300 sm:flex-row">
+  <div class="panels-container flex h-full w-full transition-[padding-top] duration-300 sm:flex-row">
     <ChildPanel side="left" childIndex={1} defaultName="Jimmy" />
     <ChildPanel side="right" childIndex={0} defaultName="Emily" />
   </div>
@@ -99,6 +99,8 @@ import Modals from '../components/Modals.astro';
       padding-top: calc(40px + env(safe-area-inset-top, 0px));
       flex-direction: row;
       overflow: hidden;
+      height: 100vh;
+      height: 100dvh; /* Dynamic viewport height for mobile */
     }
     
     .child-panel {
@@ -133,6 +135,8 @@ import Modals from '../components/Modals.astro';
   @media (min-width: 640px) {
     .panels-container {
       padding-top: 0;
+      height: 100vh;
+      height: 100dvh; /* Dynamic viewport height for tablets */
     }
     
     .child-panel {

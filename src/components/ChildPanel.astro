@@ -130,14 +130,6 @@ const isLeft = side === 'left';
 </div>
 
 <style>
-  .child-panel.has-urgent {
-    animation: glow 2s infinite;
-  }
-  
-  @keyframes glow {
-    0%, 100% { background: transparent; }
-    50% { background: rgba(239, 68, 68, 0.05); }
-  }
   
   /* Mobile phone: reduce padding to maximize space */
   @media (max-width: 639px) {
@@ -233,6 +225,23 @@ const isLeft = side === 'left';
     .controls-section button[data-action="log-diaper"] {
       width: 3.5rem !important;
       height: 3rem !important;
+    }
+  }
+  
+  /* Tablet adjustments - reduce meds height for smaller viewports */
+  @media (min-width: 640px) and (max-height: 900px) {
+    .meds-wrapper {
+      height: 180px !important;
+    }
+  }
+  
+  @media (min-width: 640px) and (max-height: 700px) {
+    .meds-wrapper {
+      height: 140px !important;
+    }
+    
+    .planner-container {
+      min-height: 100px;
     }
   }
   
