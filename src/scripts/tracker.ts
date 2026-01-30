@@ -55,21 +55,11 @@ interface TrackerData {
   logs: DayLog[];
   // Historical logs keyed by date string (e.g., "Mon Jan 27 2026")
   historicalLogs: Record<string, DayLog[]>;
-  // Google Calendar iCal URL
+  // Google Calendar iCal URL (kept for potential future use)
   calendarUrl?: string;
-  // Dismissed calendar event UIDs (won't show in planner)
-  dismissedCalendarEvents?: string[];
 }
 
-interface CalendarEvent {
-  uid: string;
-  summary: string;
-  description?: string;
-  start: string;
-  end?: string;
-  allDay: boolean;
-  recurrence?: string;
-}
+// CalendarEvent interface removed - sync is now one-way (write-only to Google Calendar)
 
 interface Urgency {
   status: 'urgent' | 'soon' | 'normal' | 'done';
@@ -140,8 +130,7 @@ let audioContext: AudioContext | null = null;
 let notificationDismissed = false;
 let selectedDoseCount = 1;
 let plannerScale = [1, 1]; // Scale for each child's planner
-let calendarEvents: CalendarEvent[] = []; // Events from Google Calendar
-let calendarLastFetched = 0; // Timestamp of last calendar fetch
+// Calendar sync is one-way (write-only to Google Calendar)
 let editMode: boolean[] = [false, false]; // Edit mode per child for medication deletion
 
 // Initialize
@@ -190,13 +179,8 @@ export async function init() {
     checkOverdueBeep();
   }, 30000);
   
-  // Refresh calendar every 5 minutes
-  setInterval(() => {
-    fetchCalendarEvents();
-  }, 5 * 60 * 1000);
-  
-  // Initial calendar fetch
-  fetchCalendarEvents();
+  // Calendar sync is now one-way (write-only to Google Calendar)
+  // Reading from iCal is disabled because we can't differentiate which child events belong to
   
   setupEventListeners();
   
@@ -204,54 +188,9 @@ export async function init() {
   setupRealtimeSync();
 }
 
-// ===== GOOGLE CALENDAR SYNC =====
-async function fetchCalendarEvents() {
-  if (!data.calendarUrl) return;
-  
-  // Don't fetch if we fetched less than 1 minute ago
-  const now = Date.now();
-  if (now - calendarLastFetched < 60000) return;
-  
-  try {
-    const response = await fetch(`/api/calendar?url=${encodeURIComponent(data.calendarUrl)}`);
-    if (!response.ok) {
-      console.error('Failed to fetch calendar:', response.status);
-      return;
-    }
-    
-    const result = await response.json();
-    if (result.events) {
-      calendarEvents = result.events;
-      calendarLastFetched = now;
-      console.log(`Loaded ${calendarEvents.length} calendar events`);
-      
-      // Re-render planners to show calendar events
-      for (let i = 0; i < 2; i++) {
-        renderPlanner(i);
-      }
-    }
-  } catch (error) {
-    console.error('Error fetching calendar:', error);
-  }
-}
-
-// Dismiss a calendar event (hide it from the planner)
-function dismissCalendarEvent(uid: string) {
-  if (!data.dismissedCalendarEvents) {
-    data.dismissedCalendarEvents = [];
-  }
-  if (!data.dismissedCalendarEvents.includes(uid)) {
-    data.dismissedCalendarEvents.push(uid);
-    saveData();
-    // Re-render planners to remove the dismissed event
-    for (let i = 0; i < 2; i++) {
-      renderPlanner(i);
-    }
-  }
-}
-
-// Expose for global access
-(window as any).dismissCalendarEvent = dismissCalendarEvent;
+// ===== GOOGLE CALENDAR SYNC (Write-Only) =====
+// Events are pushed to Google Calendar but not read back
+// This is one-way sync because we can't differentiate which child external events belong to
 
 // Sync event to Google Calendar
 async function syncToGoogleCalendar(event: {
@@ -286,73 +225,6 @@ async function syncToGoogleCalendar(event: {
   } catch (error) {
     console.error('Error syncing to Google Calendar:', error);
   }
-}
-
-function getCalendarEventsForDate(date: Date): { uid: string; hour: number; minute: number; summary: string; description?: string; allDay: boolean }[] {
-  const dateStr = date.toISOString().split('T')[0]; // YYYY-MM-DD
-  const events: { uid: string; hour: number; minute: number; summary: string; description?: string; allDay: boolean }[] = [];
-  
-  // Get child names to filter out our own synced events
-  const childNames = data.children.map(c => c.name.toLowerCase());
-  const dismissedEvents = new Set(data.dismissedCalendarEvents || []);
-  
-  for (const event of calendarEvents) {
-    // Skip dismissed events
-    if (dismissedEvents.has(event.uid)) continue;
-    
-    // Skip events created by our app (they have emoji prefix and child name)
-    const summary = event.summary || '';
-    const isOurEvent = (summary.startsWith('🍼') || summary.startsWith('💊') || summary.startsWith('👶')) &&
-      childNames.some(name => summary.toLowerCase().includes(`${name}:`));
-    if (isOurEvent) continue;
-    
-    // Check if event is on this date
-    const eventDate = event.start.split('T')[0];
-    if (eventDate === dateStr) {
-      if (event.allDay) {
-        events.push({
-          uid: event.uid,
-          hour: 0,
-          minute: 0,
-          summary: event.summary,
-          description: event.description,
-          allDay: true
-        });
-      } else {
-        // Parse the time
-        const timePart = event.start.split('T')[1];
-        if (timePart) {
-          const [hourStr, minStr] = timePart.split(':');
-          let hour = parseInt(hourStr);
-          const minute = parseInt(minStr);
-          
-          // Handle UTC conversion if needed
-          if (event.start.endsWith('Z')) {
-            const utcDate = new Date(event.start);
-            events.push({
-              uid: event.uid,
-              hour: utcDate.getHours(),
-              minute: utcDate.getMinutes(),
-              summary: event.summary,
-              description: event.description,
-              allDay: false
-            });
-          } else {
-            events.push({
-              uid: event.uid,
-              hour,
-              minute,
-              summary: event.summary,
-              description: event.description,
-              allDay: false
-            });
-          }
-        }
-      }
-    }
-  }
-  
-  return events.sort((a, b) => (a.hour * 60 + a.minute) - (b.hour * 60 + b.minute));
 }
 
 function setupEventListeners() {
@@ -564,9 +436,17 @@ function navigateDate(delta: number) {
   playClickSound();
 }
 
+// Get a locale-independent date key (YYYY-MM-DD format)
+function getDateKey(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 function isViewingToday(): boolean {
   const today = new Date();
-  return viewingDate.toDateString() === today.toDateString();
+  return getDateKey(viewingDate) === getDateKey(today);
 }
 
 function getViewingLogs(): DayLog[] {
@@ -574,7 +454,7 @@ function getViewingLogs(): DayLog[] {
     return data.logs;
   }
   
-  const dateKey = viewingDate.toDateString();
+  const dateKey = getDateKey(viewingDate);
   return data.historicalLogs[dateKey] || [
     { feeds: [], diapers: [], meds: [], medsDone: {}, feedAmounts: {} },
     { feeds: [], diapers: [], meds: [], medsDone: {}, feedAmounts: {} }
@@ -1270,43 +1150,8 @@ function renderPlanner(childIndex: number) {
     `;
   });
   
-  // Google Calendar events - show on both panels
-  const calEvents = getCalendarEventsForDate(viewingDate);
-  calEvents.forEach(calEvent => {
-    const escapedUid = calEvent.uid.replace(/'/g, "\\'").replace(/"/g, '&quot;');
-    const dismissBtn = `<button onclick="event.stopPropagation(); dismissCalendarEvent('${escapedUid}')" class="ml-1 p-1 hover:bg-pink-500/50 rounded opacity-60 hover:opacity-100 flex-shrink-0" title="Hide this event">✕</button>`;
-    
-    if (calEvent.allDay) {
-      // All-day events at the very top
-      html += `
-        <div class="planner-event absolute h-9 rounded flex items-center px-2 text-xs border-l-2 bg-pink-500/30 border-pink-500 text-white" 
-             style="top: 4px; left: 56px; right: 8px;"
-             title="${calEvent.description || calEvent.summary}">
-          <span class="opacity-70">📅</span>
-          <span class="ml-2 font-medium truncate flex-1">${calEvent.summary}</span>
-          <span class="px-1.5 py-0.5 bg-pink-500/40 rounded text-[8px] uppercase tracking-wider flex-shrink-0">All Day</span>
-          ${dismissBtn}
-        </div>
-      `;
-    } else {
-      const y = (calEvent.hour + calEvent.minute / 60) * hourHeight;
-      const displayHour = calEvent.hour % 12 || 12;
-      const ampm = calEvent.hour >= 12 ? 'PM' : 'AM';
-      const minuteStr = String(calEvent.minute).padStart(2, '0');
-      const timeStr = `${displayHour}:${minuteStr} ${ampm}`;
-      
-      html += `
-        <div class="planner-event absolute h-9 rounded flex items-center px-2 text-xs border-l-2 bg-pink-500/30 border-pink-500 text-white" 
-             style="top: ${y - 18}px; left: 56px; right: 8px;"
-             title="${calEvent.description || calEvent.summary}">
-          <span class="opacity-70">📅 ${timeStr}</span>
-          <span class="ml-2 font-medium truncate flex-1">${calEvent.summary}</span>
-          <span class="px-1.5 py-0.5 bg-pink-500/40 rounded text-[8px] uppercase tracking-wider flex-shrink-0">GCal</span>
-          ${dismissBtn}
-        </div>
-      `;
-    }
-  });
+  // Google Calendar sync is now one-way (write-only)
+  // Events are pushed to GCal but not read back, as we can't differentiate which child they belong to
   
   html += '</div>';
   container.innerHTML = html;
@@ -1789,8 +1634,7 @@ function applyParsedData(parsed: any) {
       meds: l.meds || [],
       feedAmounts: l.feedAmounts || {}
     })),
-    historicalLogs: parsed.historicalLogs || {},
-    dismissedCalendarEvents: parsed.dismissedCalendarEvents || []
+    historicalLogs: parsed.historicalLogs || {}
   };
   
   // Load feed amounts from saved data if available
@@ -2000,7 +1844,7 @@ function saveData() {
 }
 
 function checkNewDay() {
-  const today = new Date().toDateString();
+  const today = getDateKey(new Date());
   if (data.today !== today) {
     // Archive old logs if they exist and have any data
     if (data.today && hasAnyData(data.logs)) {
