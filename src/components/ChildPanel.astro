@@ -172,6 +172,17 @@ const isLeft = side === 'left';
     @apply text-red-500;
   }
   
+  /* Realtime connected indicator - pulsing green dot */
+  .sync-status.realtime .sync-icon {
+    @apply text-green-400;
+    animation: pulse-realtime 2s ease-in-out infinite;
+  }
+  
+  @keyframes pulse-realtime {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.6; transform: scale(0.9); }
+  }
+  
   /* Medication wrapper - allows overflow for delete buttons */
   .meds-wrapper {
     overflow: hidden;

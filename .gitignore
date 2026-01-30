@@ -21,3 +21,4 @@ dist/
 
 # Vercel
 .vercel/
+.vercel

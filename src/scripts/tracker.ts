@@ -1,4 +1,4 @@
-import { supabase, deviceId } from './supabase';
+import { supabase, deviceId, clientId, subscribeToChanges } from './supabase';
 
 // Types
 interface Medication {
@@ -57,6 +57,8 @@ interface TrackerData {
   historicalLogs: Record<string, DayLog[]>;
   // Google Calendar iCal URL
   calendarUrl?: string;
+  // Dismissed calendar event UIDs (won't show in planner)
+  dismissedCalendarEvents?: string[];
 }
 
 interface CalendarEvent {
@@ -158,6 +160,11 @@ export async function init() {
   }
   
   loadSoundPreference();
+  
+  // Always reset viewingDate to current date on init
+  // This ensures we're viewing "today" when the app loads
+  viewingDate = new Date();
+  
   checkNewDay();
   updateDisplay();
   updateDate();
@@ -192,6 +199,9 @@ export async function init() {
   fetchCalendarEvents();
   
   setupEventListeners();
+  
+  // Setup realtime sync for multi-client updates
+  setupRealtimeSync();
 }
 
 // ===== GOOGLE CALENDAR SYNC =====
@@ -224,6 +234,24 @@ async function fetchCalendarEvents() {
     console.error('Error fetching calendar:', error);
   }
 }
+
+// Dismiss a calendar event (hide it from the planner)
+function dismissCalendarEvent(uid: string) {
+  if (!data.dismissedCalendarEvents) {
+    data.dismissedCalendarEvents = [];
+  }
+  if (!data.dismissedCalendarEvents.includes(uid)) {
+    data.dismissedCalendarEvents.push(uid);
+    saveData();
+    // Re-render planners to remove the dismissed event
+    for (let i = 0; i < 2; i++) {
+      renderPlanner(i);
+    }
+  }
+}
+
+// Expose for global access
+(window as any).dismissCalendarEvent = dismissCalendarEvent;
 
 // Sync event to Google Calendar
 async function syncToGoogleCalendar(event: {
@@ -260,16 +288,30 @@ async function syncToGoogleCalendar(event: {
   }
 }
 
-function getCalendarEventsForDate(date: Date): { hour: number; minute: number; summary: string; description?: string; allDay: boolean }[] {
+function getCalendarEventsForDate(date: Date): { uid: string; hour: number; minute: number; summary: string; description?: string; allDay: boolean }[] {
   const dateStr = date.toISOString().split('T')[0]; // YYYY-MM-DD
-  const events: { hour: number; minute: number; summary: string; description?: string; allDay: boolean }[] = [];
+  const events: { uid: string; hour: number; minute: number; summary: string; description?: string; allDay: boolean }[] = [];
+  
+  // Get child names to filter out our own synced events
+  const childNames = data.children.map(c => c.name.toLowerCase());
+  const dismissedEvents = new Set(data.dismissedCalendarEvents || []);
   
   for (const event of calendarEvents) {
+    // Skip dismissed events
+    if (dismissedEvents.has(event.uid)) continue;
+    
+    // Skip events created by our app (they have emoji prefix and child name)
+    const summary = event.summary || '';
+    const isOurEvent = (summary.startsWith('🍼') || summary.startsWith('💊') || summary.startsWith('👶')) &&
+      childNames.some(name => summary.toLowerCase().includes(`${name}:`));
+    if (isOurEvent) continue;
+    
     // Check if event is on this date
     const eventDate = event.start.split('T')[0];
     if (eventDate === dateStr) {
       if (event.allDay) {
         events.push({
+          uid: event.uid,
           hour: 0,
           minute: 0,
           summary: event.summary,
@@ -288,6 +330,7 @@ function getCalendarEventsForDate(date: Date): { hour: number; minute: number; s
           if (event.start.endsWith('Z')) {
             const utcDate = new Date(event.start);
             events.push({
+              uid: event.uid,
               hour: utcDate.getHours(),
               minute: utcDate.getMinutes(),
               summary: event.summary,
@@ -296,6 +339,7 @@ function getCalendarEventsForDate(date: Date): { hour: number; minute: number; s
             });
           } else {
             events.push({
+              uid: event.uid,
               hour,
               minute,
               summary: event.summary,
@@ -850,7 +894,7 @@ function getTimelineEvents(childIndex: number): TimelineEvent[] {
 
 // Calculate column layout for overlapping events
 function calculateEventColumns(events: TimelineEvent[], hourHeight: number): Map<TimelineEvent, { column: number; totalColumns: number }> {
-  const eventHeight = 24; // h-6 = 24px
+  const eventHeight = 36; // h-9 = 36px
   const overlapThreshold = eventHeight; // Events within this vertical distance are considered overlapping
   
   // Sort events by their Y position (time)
@@ -917,7 +961,7 @@ interface ScheduledEvent {
 }
 
 function calculateScheduledColumns(events: ScheduledEvent[], hourHeight: number): Map<ScheduledEvent, { column: number; totalColumns: number }> {
-  const eventHeight = 24; // h-6 = 24px
+  const eventHeight = 36; // h-9 = 36px
   
   // Sort events by their Y position (time)
   const sortedEvents = [...events].sort((a, b) => {
@@ -1159,7 +1203,7 @@ function renderPlanner(childIndex: number) {
       const borderStyle = isPast || isGhost ? 'border-dashed' : 'border-dotted';
       
       html += `
-        <div class="planner-event absolute h-6 rounded flex items-center justify-between px-2 text-xs border-l-2 ${bgClass} ${borderStyle}" style="top: ${y - 12}px; ${leftStyle}">
+        <div class="planner-event absolute h-9 rounded flex items-center justify-between px-2 text-xs border-l-2 ${bgClass} ${borderStyle}" style="top: ${y - 18}px; ${leftStyle}">
           <span class="flex items-center min-w-0">
             <span class="opacity-70 ${totalColumns > 2 ? 'hidden' : ''}">${event.time}</span>
             <span class="${totalColumns > 2 ? '' : 'ml-1 '}font-medium truncate">${event.name}</span>
@@ -1216,8 +1260,8 @@ function renderPlanner(childIndex: number) {
     const attrs = isInEditMode ? '' : draggableAttrs;
     
     html += `
-      <div class="planner-event absolute h-6 rounded flex items-center px-2 text-xs border-l-2 ${bgClass} text-white ${cursorClass} ${isInEditMode ? 'jiggle-event' : ''}" 
-           style="top: ${y - 12}px; ${leftStyle}" 
+      <div class="planner-event absolute h-9 rounded flex items-center px-2 text-xs border-l-2 ${bgClass} text-white ${cursorClass} ${isInEditMode ? 'jiggle-event' : ''}" 
+           style="top: ${y - 18}px; ${leftStyle}" 
            ${attrs}>
         <span class="opacity-70 event-time ${totalColumns > 2 ? 'hidden' : ''}">${event.time}</span>
         <span class="${totalColumns > 2 ? '' : 'ml-2 '}font-medium truncate flex-1">${event.label}</span>
@@ -1229,15 +1273,19 @@ function renderPlanner(childIndex: number) {
   // Google Calendar events - show on both panels
   const calEvents = getCalendarEventsForDate(viewingDate);
   calEvents.forEach(calEvent => {
+    const escapedUid = calEvent.uid.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    const dismissBtn = `<button onclick="event.stopPropagation(); dismissCalendarEvent('${escapedUid}')" class="ml-1 p-1 hover:bg-pink-500/50 rounded opacity-60 hover:opacity-100 flex-shrink-0" title="Hide this event">✕</button>`;
+    
     if (calEvent.allDay) {
       // All-day events at the very top
       html += `
-        <div class="planner-event absolute h-6 rounded flex items-center px-2 text-xs border-l-2 bg-pink-500/30 border-pink-500 text-white" 
+        <div class="planner-event absolute h-9 rounded flex items-center px-2 text-xs border-l-2 bg-pink-500/30 border-pink-500 text-white" 
              style="top: 4px; left: 56px; right: 8px;"
              title="${calEvent.description || calEvent.summary}">
           <span class="opacity-70">📅</span>
-          <span class="ml-2 font-medium truncate">${calEvent.summary}</span>
-          <span class="ml-auto px-1.5 py-0.5 bg-pink-500/40 rounded text-[8px] uppercase tracking-wider flex-shrink-0">All Day</span>
+          <span class="ml-2 font-medium truncate flex-1">${calEvent.summary}</span>
+          <span class="px-1.5 py-0.5 bg-pink-500/40 rounded text-[8px] uppercase tracking-wider flex-shrink-0">All Day</span>
+          ${dismissBtn}
         </div>
       `;
     } else {
@@ -1248,12 +1296,13 @@ function renderPlanner(childIndex: number) {
       const timeStr = `${displayHour}:${minuteStr} ${ampm}`;
       
       html += `
-        <div class="planner-event absolute h-6 rounded flex items-center px-2 text-xs border-l-2 bg-pink-500/30 border-pink-500 text-white" 
-             style="top: ${y - 12}px; left: 56px; right: 8px;"
+        <div class="planner-event absolute h-9 rounded flex items-center px-2 text-xs border-l-2 bg-pink-500/30 border-pink-500 text-white" 
+             style="top: ${y - 18}px; left: 56px; right: 8px;"
              title="${calEvent.description || calEvent.summary}">
           <span class="opacity-70">📅 ${timeStr}</span>
-          <span class="ml-2 font-medium truncate">${calEvent.summary}</span>
-          <span class="ml-auto px-1.5 py-0.5 bg-pink-500/40 rounded text-[8px] uppercase tracking-wider flex-shrink-0">GCal</span>
+          <span class="ml-2 font-medium truncate flex-1">${calEvent.summary}</span>
+          <span class="px-1.5 py-0.5 bg-pink-500/40 rounded text-[8px] uppercase tracking-wider flex-shrink-0">GCal</span>
+          ${dismissBtn}
         </div>
       `;
     }
@@ -1702,7 +1751,10 @@ async function loadData(): Promise<boolean> {
         // Sync to localStorage
         localStorage.setItem('twinsTracker', JSON.stringify(data));
         console.log('Synced from cloud, updated_at:', rows.updated_at);
-        updateSyncStatus('synced', `Last sync: ${new Date(rows.updated_at).toLocaleTimeString()}`);
+        // Track the known updated_at to detect external changes
+        lastKnownUpdatedAt = rows.updated_at;
+        // Will be upgraded to 'realtime' once subscription is connected
+        updateSyncStatus('synced', `Loaded from cloud: ${new Date(rows.updated_at).toLocaleTimeString()}`);
       }
     } catch (e) {
       console.error('Supabase error:', e);
@@ -1737,7 +1789,8 @@ function applyParsedData(parsed: any) {
       meds: l.meds || [],
       feedAmounts: l.feedAmounts || {}
     })),
-    historicalLogs: parsed.historicalLogs || {}
+    historicalLogs: parsed.historicalLogs || {},
+    dismissedCalendarEvents: parsed.dismissedCalendarEvents || []
   };
   
   // Load feed amounts from saved data if available
@@ -1765,15 +1818,119 @@ function generateDefaultTimes(doses: number, startTime?: string): string[] {
 let saveTimeout: number | null = null;
 const SAVE_DEBOUNCE_MS = 1000;
 
+// Realtime sync tracking
+let lastSaveTimestamp = 0; // Timestamp of our last save
+let isApplyingRemoteUpdate = false; // Flag to prevent save loops during remote updates
+let lastKnownUpdatedAt: string | null = null; // Track the last known updated_at to detect external changes
+
+// Show a toast notification when syncing from another device
+function showSyncToast(message: string) {
+  // Remove any existing toast
+  const existingToast = document.getElementById('sync-toast');
+  if (existingToast) {
+    existingToast.remove();
+  }
+  
+  // Create toast element
+  const toast = document.createElement('div');
+  toast.id = 'sync-toast';
+  toast.className = 'sync-toast';
+  toast.innerHTML = `
+    <svg class="sync-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M21 12a9 9 0 0 0-9-9M3 12a9 9 0 0 0 9 9M21 12a9 9 0 0 1-9 9M3 12a9 9 0 0 1 9-9"/>
+      <path d="M16 12h5l-3-3m3 3l-3 3M8 12H3l3 3m-3-3l3-3"/>
+    </svg>
+    <span>${message}</span>
+  `;
+  
+  document.body.appendChild(toast);
+  
+  // Animate in
+  requestAnimationFrame(() => {
+    toast.classList.add('show');
+  });
+  
+  // Remove after delay
+  setTimeout(() => {
+    toast.classList.remove('show');
+    setTimeout(() => toast.remove(), 300);
+  }, 2500);
+}
+
+// Setup realtime subscription to sync changes from other clients
+function setupRealtimeSync() {
+  if (!supabase) {
+    console.log('Supabase not configured - realtime sync disabled');
+    return;
+  }
+  
+  const channel = subscribeToChanges((payload) => {
+    // Only process UPDATE events
+    if (payload.eventType !== 'UPDATE' && payload.eventType !== 'INSERT') {
+      return;
+    }
+    
+    const newData = payload.new;
+    if (!newData || !newData.data) return;
+    
+    // Check if this update is from another client by comparing updated_at
+    const remoteUpdatedAt = newData.updated_at;
+    
+    // If we just saved (within last 2 seconds), this is likely our own update
+    const timeSinceOurSave = Date.now() - lastSaveTimestamp;
+    if (timeSinceOurSave < 2000) {
+      console.log('Ignoring realtime update - likely our own save');
+      lastKnownUpdatedAt = remoteUpdatedAt;
+      return;
+    }
+    
+    // If updated_at is the same as last known, skip
+    if (remoteUpdatedAt === lastKnownUpdatedAt) {
+      console.log('Ignoring realtime update - same timestamp');
+      return;
+    }
+    
+    console.log('Applying remote update from another client');
+    lastKnownUpdatedAt = remoteUpdatedAt;
+    
+    // Apply the remote data
+    isApplyingRemoteUpdate = true;
+    try {
+      applyParsedData(newData.data);
+      localStorage.setItem('twinsTracker', JSON.stringify(data));
+      
+      // Refresh the UI
+      updateDisplay();
+      checkNotifications();
+      
+      // Show sync toast
+      showSyncToast('Synced from another device');
+      
+      // Play a subtle sound
+      playClickSound();
+      
+      // Restore realtime status after applying remote update
+      updateSyncStatus('realtime', `Realtime sync - updated ${new Date().toLocaleTimeString()}`);
+    } finally {
+      isApplyingRemoteUpdate = false;
+    }
+  });
+  
+  if (channel) {
+    console.log('Realtime sync enabled');
+    updateSyncStatus('realtime', 'Realtime sync active - changes sync instantly');
+  }
+}
+
 // Sync status management
-type SyncStatus = 'synced' | 'syncing' | 'offline' | 'error';
+type SyncStatus = 'synced' | 'syncing' | 'offline' | 'error' | 'realtime';
 
 function updateSyncStatus(status: SyncStatus, title?: string) {
   const el = document.getElementById('sync-status');
   if (!el) return;
   
   // Remove all status classes
-  el.classList.remove('synced', 'syncing', 'offline', 'error');
+  el.classList.remove('synced', 'syncing', 'offline', 'error', 'realtime');
   el.classList.add(status);
   
   // Update title/tooltip
@@ -1781,7 +1938,8 @@ function updateSyncStatus(status: SyncStatus, title?: string) {
     synced: 'Synced to cloud',
     syncing: 'Syncing...',
     offline: 'Local only (no cloud)',
-    error: 'Sync error'
+    error: 'Sync error',
+    realtime: 'Realtime sync active'
   };
   el.title = title || titles[status];
 }
@@ -1789,6 +1947,12 @@ function updateSyncStatus(status: SyncStatus, title?: string) {
 function saveData() {
   // Always save to localStorage immediately for offline access
   localStorage.setItem('twinsTracker', JSON.stringify(data));
+  
+  // Don't save to cloud if we're applying a remote update (prevents loops)
+  if (isApplyingRemoteUpdate) {
+    console.log('Skipping cloud save - applying remote update');
+    return;
+  }
   
   // Skip Supabase if not configured
   if (!supabase) {
@@ -1806,12 +1970,16 @@ function saveData() {
   
   saveTimeout = window.setTimeout(async () => {
     try {
+      const now = new Date().toISOString();
+      lastSaveTimestamp = Date.now(); // Track when we saved
+      lastKnownUpdatedAt = now; // Track the timestamp we're saving
+      
       const { error } = await supabase
         .from('tracker_data')
         .upsert({
           device_id: deviceId,
           data: data,
-          updated_at: new Date().toISOString()
+          updated_at: now
         }, {
           onConflict: 'device_id'
         });
@@ -1821,7 +1989,8 @@ function saveData() {
         updateSyncStatus('error', `Sync error: ${error.message}`);
       } else {
         console.log('Data synced to cloud');
-        updateSyncStatus('synced');
+        // Restore realtime status after successful save
+        updateSyncStatus('realtime', 'Realtime sync active - changes sync instantly');
       }
     } catch (e) {
       console.error('Error saving to Supabase:', e);
@@ -1855,6 +2024,9 @@ function checkNewDay() {
     
     // Reset viewing date to today
     viewingDate = new Date();
+    
+    // Update the displayed date in the UI
+    updateDate();
     
     saveData();
   }
