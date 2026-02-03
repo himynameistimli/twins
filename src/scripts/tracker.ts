@@ -17,6 +17,9 @@ interface FeedSchedule {
 
 interface Child {
   name: string;
+  birthDate?: string;
+  weightKg?: number;
+  weightDate?: string;
   medications: Medication[];
   feedSchedules: FeedSchedule[];
 }
@@ -81,6 +84,126 @@ interface TimelineEvent {
   doseIndex?: number;
 }
 
+// ===== MILK CALCULATION FUNCTIONS =====
+
+/**
+ * Get the ml/kg/day rate based on baby's age (WHO/AAP guidelines)
+ */
+function getMlPerKgForAge(birthDate: string): number {
+  const birth = new Date(birthDate);
+  const now = new Date();
+  const ageInDays = Math.floor((now.getTime() - birth.getTime()) / (1000 * 60 * 60 * 24));
+  const ageInMonths = ageInDays / 30.44; // Average days per month
+  
+  if (ageInMonths < 2) return 150;
+  if (ageInMonths < 4) return 140;
+  if (ageInMonths < 6) return 130;
+  if (ageInMonths < 9) return 120;
+  return 100; // 9-12 months
+}
+
+/**
+ * Get the daily weight gain rate based on baby's age (WHO standards)
+ */
+function getGrowthRateForAge(birthDate: string): number {
+  const birth = new Date(birthDate);
+  const now = new Date();
+  const ageInDays = Math.floor((now.getTime() - birth.getTime()) / (1000 * 60 * 60 * 24));
+  const ageInMonths = ageInDays / 30.44;
+  
+  if (ageInMonths < 3) return 0.030; // 30g/day in kg
+  if (ageInMonths < 6) return 0.020; // 20g/day
+  return 0.012; // 12g/day for 6-12 months
+}
+
+/**
+ * Get projected current weight based on last weigh-in and growth rate
+ */
+function getProjectedWeight(childIndex: number): number {
+  const child = data.children[childIndex];
+  if (!child.weightKg || !child.birthDate) return 0;
+  
+  const lastWeight = child.weightKg;
+  const weightDate = child.weightDate ? new Date(child.weightDate) : new Date();
+  const now = new Date();
+  const daysSinceWeighIn = Math.floor((now.getTime() - weightDate.getTime()) / (1000 * 60 * 60 * 24));
+  
+  if (daysSinceWeighIn <= 0) return lastWeight;
+  
+  const dailyGain = getGrowthRateForAge(child.birthDate);
+  return lastWeight + (daysSinceWeighIn * dailyGain);
+}
+
+/**
+ * Get daily milk target in mL for a child
+ */
+function getDailyMilkTarget(childIndex: number): number {
+  const child = data.children[childIndex];
+  if (!child.birthDate) return 0;
+  
+  const projectedWeight = getProjectedWeight(childIndex);
+  const mlPerKg = getMlPerKgForAge(child.birthDate);
+  
+  return Math.round(projectedWeight * mlPerKg);
+}
+
+/**
+ * Get today's total feed amount in mL
+ */
+function getTodaysFeedTotal(childIndex: number): number {
+  const feeds = data.logs[childIndex]?.feeds || [];
+  let total = 0;
+  
+  for (const feed of feeds) {
+    // Extract amount from text like "🍼 Feed 70mL"
+    const match = feed.text.match(/(\d+)\s*mL/i);
+    if (match) {
+      total += parseInt(match[1], 10);
+    }
+  }
+  
+  return total;
+}
+
+/**
+ * Calculate recommended per-feed amount based on daily target and number of feeds
+ */
+function getRecommendedFeedAmount(childIndex: number): number {
+  const child = data.children[childIndex];
+  const feedSchedule = child.feedSchedules?.[0];
+  const numFeeds = feedSchedule?.times?.length || 8;
+  
+  const dailyTarget = getDailyMilkTarget(childIndex);
+  if (dailyTarget === 0) return feedSchedule?.defaultAmount || 100;
+  
+  // Calculate per feed, round up to nearest 5mL, add ~10% buffer
+  const perFeed = dailyTarget / numFeeds;
+  const rounded = Math.ceil(perFeed / 5) * 5;
+  const withBuffer = rounded + 5; // Add 5mL buffer
+  
+  return withBuffer;
+}
+
+/**
+ * Get number of days since last weight update
+ */
+function getDaysSinceWeighIn(childIndex: number): number {
+  const child = data.children[childIndex];
+  if (!child.weightDate) return -1;
+  
+  const weightDate = new Date(child.weightDate);
+  const now = new Date();
+  return Math.floor((now.getTime() - weightDate.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+/**
+ * Check if weight needs to be updated (older than 7 days)
+ */
+function isWeightStale(childIndex: number): boolean {
+  const days = getDaysSinceWeighIn(childIndex);
+  return days > 7;
+}
+
 // Drag-to-edit state
 interface DragState {
   active: boolean;
@@ -139,7 +262,6 @@ function syncPlannerScale(scale: number) {
 }
 
 // Calendar sync is one-way (write-only to Google Calendar)
-let editMode: boolean[] = [false, false]; // Edit mode per child for medication deletion
 
 // Initialize
 export async function init() {
@@ -441,6 +563,48 @@ function renderSummary(childIndex: number) {
     html += `</div>`;
   }
   
+  // Consolidated stats section (milk progress + weight) - smaller text, at the bottom
+  const child = data.children[childIndex];
+  const dailyTarget = getDailyMilkTarget(childIndex);
+  const todaysTotal = getTodaysFeedTotal(childIndex);
+  const hasStats = dailyTarget > 0 || (child.birthDate && child.weightKg);
+  
+  if (hasStats) {
+    html += `<div class="summary-divider"></div>`;
+    html += `<div class="summary-stats">`;
+    
+    // Today's milk progress
+    if (dailyTarget > 0) {
+      const percentage = Math.min(100, Math.round((todaysTotal / dailyTarget) * 100));
+      const isComplete = todaysTotal >= dailyTarget;
+      html += `<div class="stat-row">`;
+      html += `<span class="stat-label">Today</span>`;
+      html += `<span class="stat-value ${isComplete ? 'text-green-500' : ''}">${todaysTotal}/${dailyTarget} mL</span>`;
+      html += `<div class="stat-bar"><div class="stat-bar-fill ${isComplete ? 'complete' : ''}" style="width: ${percentage}%"></div></div>`;
+      html += `</div>`;
+    }
+    
+    // Weight info
+    if (child.birthDate && child.weightKg) {
+      const projectedWeight = getProjectedWeight(childIndex);
+      const daysSince = getDaysSinceWeighIn(childIndex);
+      const isStale = isWeightStale(childIndex);
+      
+      html += `<div class="stat-row ${isStale ? 'stale' : ''}">`;
+      html += `<span class="stat-label">Weight</span>`;
+      html += `<span class="stat-value ${isStale ? 'text-amber-400' : ''}">${projectedWeight.toFixed(2)} kg</span>`;
+      if (daysSince > 0) {
+        html += `<span class="stat-age ${isStale ? 'text-amber-400' : ''}">${daysSince}d ago</span>`;
+      }
+      if (isStale) {
+        html += `<button class="stat-update-btn" data-action="open-settings" data-child="${childIndex}">Update</button>`;
+      }
+      html += `</div>`;
+    }
+    
+    html += `</div>`;
+  }
+  
   container.innerHTML = html;
 }
 
@@ -479,12 +643,16 @@ function setupEventListeners() {
       case 'open-med-settings':
         openMedSettings(childIndex);
         break;
-      case 'exit-edit-mode':
-        (window as any).toggleMedEditMode(childIndex);
-        break;
       case 'log-diaper':
         const type = target.getAttribute('data-type') as 'pee' | 'poop';
         logDiaper(childIndex, type);
+        break;
+      case 'log-feed':
+        logFeed(childIndex);
+        break;
+      case 'adjust-feed':
+        const delta = parseInt(target.getAttribute('data-delta') || '0');
+        adjustFeedAmount(childIndex, delta);
         break;
       case 'close-modal':
         closeModal();
@@ -492,8 +660,11 @@ function setupEventListeners() {
       case 'save-medication':
         saveMedication();
         break;
-      case 'save-name':
-        saveName();
+      case 'save-child-settings':
+        saveChildSettings();
+        break;
+      case 'open-settings':
+        openChildSettings(childIndex);
         break;
       case 'dismiss-tooltip':
         dismissChildTooltip(childIndex);
@@ -1760,6 +1931,9 @@ async function loadDefaults(): Promise<void> {
     if (defaults.children && Array.isArray(defaults.children)) {
       data.children = defaults.children.map((child: any, i: number) => ({
         name: child.name || data.children[i]?.name || `Child ${i + 1}`,
+        birthDate: child.birthDate || data.children[i]?.birthDate,
+        weightKg: child.weightKg || data.children[i]?.weightKg,
+        weightDate: child.weightDate || data.children[i]?.weightDate,
         medications: (child.medications || []).map((m: any) => ({
           id: m.id || Date.now().toString() + Math.random(),
           name: m.name,
@@ -1769,10 +1943,13 @@ async function loadDefaults(): Promise<void> {
         feedSchedules: child.feedSchedules || []
       }));
       
-      // Set default feed amounts from feedSchedules
-      defaults.children.forEach((child: any, i: number) => {
-        if (child.feedSchedules?.[0]?.defaultAmount) {
-          feedAmounts[i] = child.feedSchedules[0].defaultAmount;
+      // Set feed amounts: use calculated recommendation if birth data available, else use defaults
+      defaults.children.forEach((_child: any, i: number) => {
+        const recommended = getRecommendedFeedAmount(i);
+        if (recommended > 0) {
+          feedAmounts[i] = recommended;
+        } else if (_child.feedSchedules?.[0]?.defaultAmount) {
+          feedAmounts[i] = _child.feedSchedules[0].defaultAmount;
         }
       });
     }
@@ -1853,6 +2030,9 @@ function applyParsedData(parsed: any) {
     children: parsed.children.map((c: any, i: number) => ({
       ...data.children[i],
       ...c,
+      birthDate: c.birthDate || data.children[i]?.birthDate,
+      weightKg: c.weightKg || data.children[i]?.weightKg,
+      weightDate: c.weightDate || data.children[i]?.weightDate,
       feedSchedules: c.feedSchedules || [],
       medications: (c.medications || []).map((m: any) => ({
         ...m,
@@ -1869,10 +2049,13 @@ function applyParsedData(parsed: any) {
     historicalLogs: parsed.historicalLogs || {}
   };
   
-  // Load feed amounts from saved data if available
-  parsed.children?.forEach((child: any, i: number) => {
-    if (child.feedSchedules?.[0]?.defaultAmount) {
-      feedAmounts[i] = child.feedSchedules[0].defaultAmount;
+  // Set feed amounts: use calculated recommendation if birth data available
+  parsed.children?.forEach((_child: any, i: number) => {
+    const recommended = getRecommendedFeedAmount(i);
+    if (recommended > 0) {
+      feedAmounts[i] = recommended;
+    } else if (_child.feedSchedules?.[0]?.defaultAmount) {
+      feedAmounts[i] = _child.feedSchedules[0].defaultAmount;
     }
   });
 }
@@ -2617,6 +2800,43 @@ function updateFeedButton(childIndex: number, viewingToday: boolean) {
   } else {
     feedControl.classList.add('opacity-50', 'pointer-events-none');
   }
+  
+  // Update feed amount display
+  const feedAmountEl = document.getElementById(`feed-amount-${childIndex}`);
+  if (feedAmountEl) {
+    feedAmountEl.textContent = String(feedAmounts[childIndex]);
+  }
+  
+  // Update daily progress display
+  const todaysTotal = getTodaysFeedTotal(childIndex);
+  const dailyTarget = getDailyMilkTarget(childIndex);
+  
+  const progressFill = document.getElementById(`feed-progress-${childIndex}`);
+  const dailyText = document.getElementById(`feed-daily-${childIndex}`);
+  
+  if (progressFill && dailyTarget > 0) {
+    const percentage = Math.min(100, (todaysTotal / dailyTarget) * 100);
+    progressFill.style.width = `${percentage}%`;
+    
+    // Change color based on progress
+    if (percentage >= 100) {
+      progressFill.className = 'feed-progress-fill h-full bg-green-500 rounded-full transition-all';
+    } else if (percentage >= 75) {
+      progressFill.className = 'feed-progress-fill h-full bg-blue-500 rounded-full transition-all';
+    } else if (percentage >= 50) {
+      progressFill.className = 'feed-progress-fill h-full bg-yellow-500 rounded-full transition-all';
+    } else {
+      progressFill.className = 'feed-progress-fill h-full bg-orange-500 rounded-full transition-all';
+    }
+  }
+  
+  if (dailyText) {
+    if (dailyTarget > 0) {
+      dailyText.textContent = `${todaysTotal}/${dailyTarget} mL`;
+    } else {
+      dailyText.textContent = `${todaysTotal} mL`;
+    }
+  }
 }
 
 // ===== MEDICATIONS =====
@@ -2714,20 +2934,14 @@ function renderMeds(childIndex: number) {
   const meds = data.children[childIndex].medications;
   const viewingToday = isViewingToday();
   const logs = getViewingLogs();
-  const isEditMode = editMode[childIndex];
-  
-  // Maintain edit mode class
-  container.classList.toggle('edit-mode', isEditMode);
 
   if (meds.length === 0) {
-    editMode[childIndex] = false;
-    container.classList.remove('edit-mode');
-    container.innerHTML = viewingToday ? `
-      <button class="med-btn add-new col-span-3 h-full min-h-0" data-action="open-med-settings" data-child="${childIndex}">
-        <span class="text-4xl text-gray-400">+</span>
-        <span class="text-sm text-gray-400">Add medication</span>
-      </button>
-    ` : '<div class="col-span-3 text-gray-500 text-sm text-center py-4">No medications configured</div>';
+    // Show message to configure medications via settings (click on name)
+    container.innerHTML = `
+      <div class="col-span-3 text-gray-500 text-sm text-center py-4 italic">
+        Tap name to add medications
+      </div>
+    `;
     return;
   }
 
@@ -2742,33 +2956,20 @@ function renderMeds(childIndex: number) {
 
     container.innerHTML = sorted.map(({ med, urgency }) => {
       const doneCount = (logs[childIndex].medsDone[med.id] || []).length;
-      
-      // In edit mode, show X button and don't allow giving meds
-      const clickHandler = isEditMode 
-        ? '' 
-        : `onclick="giveMed(${childIndex}, '${med.id}', ${urgency.nextDose?.index ?? 0})"`;
-      
-      const deleteBtn = `
-        <button class="med-delete-btn" onclick="event.stopPropagation(); event.preventDefault(); deleteMedFromGrid(${childIndex}, '${med.id}')">✕</button>
-      `;
-      
-      const isDisabled = urgency.status === 'done' && !isEditMode;
+      const clickHandler = `onclick="giveMed(${childIndex}, '${med.id}', ${urgency.nextDose?.index ?? 0})"`;
+      const isDisabled = urgency.status === 'done';
       
       return `
         <div class="med-btn ${urgency.status} ${isDisabled ? 'pointer-events-none' : ''}" 
              ${clickHandler}
              data-med-id="${med.id}"
              data-child="${childIndex}">
-          ${deleteBtn}
-          <span class="med-name">${med.name}</span>
-          <span class="med-status">${urgency.text}</span>
-          <span class="med-time">${doneCount}/${med.doseTimes.length}</span>
+          <div class="med-name">${med.name}</div>
+          <div class="med-status">${urgency.text}</div>
+          <div class="med-count">${doneCount}/${med.doseTimes.length}</div>
         </div>
       `;
     }).join('');
-    
-    // Setup long press to enter edit mode on med buttons
-    setupMedLongPress(childIndex);
   } else {
     // Read-only view for past dates - show what was completed
     container.innerHTML = meds.map(med => {
@@ -2777,52 +2978,15 @@ function renderMeds(childIndex: number) {
       const allDone = doneCount >= totalDoses;
       
       return `
-        <div class="med-btn ${allDone ? 'done' : 'bg-card opacity-60'}" style="cursor: default;">
-          <span class="med-name">${med.name}</span>
-          <span class="med-status">${allDone ? 'Done' : `${doneCount}/${totalDoses}`}</span>
+        <div class="med-btn ${allDone ? 'done' : 'normal'}" style="cursor: default; pointer-events: none;">
+          <div class="med-name">${med.name}</div>
+          <div class="med-count">${allDone ? '✓' : `${doneCount}/${totalDoses}`}</div>
         </div>
       `;
     }).join('');
   }
 }
 
-// Setup long press on medication buttons to enter edit mode
-function setupMedLongPress(childIndex: number) {
-  const container = document.getElementById(`meds-grid-${childIndex}`);
-  if (!container) return;
-  
-  const buttons = container.querySelectorAll('.med-btn:not(.add-new)');
-  
-  buttons.forEach(btn => {
-    let pressTimer: number | null = null;
-    const LONG_PRESS_MS = 500;
-    
-    const startPress = (e: Event) => {
-      // Don't start long press if already in edit mode
-      if (editMode[childIndex]) return;
-      
-      pressTimer = window.setTimeout(() => {
-        (window as any).toggleMedEditMode(childIndex);
-      }, LONG_PRESS_MS);
-    };
-    
-    const cancelPress = () => {
-      if (pressTimer) {
-        clearTimeout(pressTimer);
-        pressTimer = null;
-      }
-    };
-    
-    btn.addEventListener('touchstart', startPress, { passive: true });
-    btn.addEventListener('touchend', cancelPress);
-    btn.addEventListener('touchmove', cancelPress);
-    btn.addEventListener('touchcancel', cancelPress);
-    
-    btn.addEventListener('mousedown', startPress);
-    btn.addEventListener('mouseup', cancelPress);
-    btn.addEventListener('mouseleave', cancelPress);
-  });
-}
 
 // ===== DIAPERS =====
 function logDiaper(childIndex: number, type: 'pee' | 'poop') {
@@ -2899,18 +3063,8 @@ function renderDoseSchedule(doses: number) {
 }
 
 function openMedSettings(childIndex: number) {
-  currentChild = childIndex;
-  document.getElementById('med-modal')?.classList.add('active');
-  document.body.classList.add('modal-open');
-  (document.getElementById('med-name') as HTMLInputElement).value = '';
-  
-  selectedDoseCount = 1;
-  document.querySelectorAll('.dose-count-btn').forEach(btn => {
-    btn.classList.toggle('selected', btn.getAttribute('data-doses') === '1');
-  });
-  renderDoseSchedule(1);
-  
-  renderMedList();
+  // Redirect to child settings modal which now includes medication management
+  openChildSettings(childIndex);
 }
 
 function renderMedList() {
@@ -2965,57 +3119,6 @@ function saveMedication() {
   updateDisplay();
 };
 
-// Toggle edit mode for medication grid
-(window as any).toggleMedEditMode = function(childIndex: number) {
-  editMode[childIndex] = !editMode[childIndex];
-  const grid = document.getElementById(`meds-grid-${childIndex}`);
-  grid?.classList.toggle('edit-mode', editMode[childIndex]);
-  
-  // Update the + button to show "Done" when in edit mode (need to search for either action)
-  const headerBtn = document.querySelector(`[data-action="open-med-settings"][data-child="${childIndex}"]`) 
-                 || document.querySelector(`[data-action="exit-edit-mode"][data-child="${childIndex}"]`);
-  if (headerBtn) {
-    if (editMode[childIndex]) {
-      headerBtn.textContent = 'Done';
-      headerBtn.classList.add('edit-done-btn');
-      headerBtn.setAttribute('data-action', 'exit-edit-mode');
-    } else {
-      headerBtn.textContent = '+';
-      headerBtn.classList.remove('edit-done-btn');
-      headerBtn.setAttribute('data-action', 'open-med-settings');
-    }
-  }
-  
-  playClickSound();
-  triggerHaptic();
-  renderMeds(childIndex);
-};
-
-// Delete medication from edit mode
-(window as any).deleteMedFromGrid = function(childIndex: number, medId: string) {
-  // Confirm deletion with haptic
-  triggerHaptic();
-  
-  data.children[childIndex].medications = data.children[childIndex].medications.filter(m => m.id !== medId);
-  saveData();
-  
-  // Exit edit mode if no more meds
-  if (data.children[childIndex].medications.length === 0) {
-    editMode[childIndex] = false;
-    const grid = document.getElementById(`meds-grid-${childIndex}`);
-    grid?.classList.remove('edit-mode');
-    
-    const headerBtn = document.querySelector(`[data-action="exit-edit-mode"][data-child="${childIndex}"]`);
-    if (headerBtn) {
-      headerBtn.textContent = '+';
-      headerBtn.classList.remove('edit-done-btn');
-      headerBtn.setAttribute('data-action', 'open-med-settings');
-    }
-  }
-  
-  playClickSound();
-  updateDisplay();
-};
 
 // Toggle edit mode for planner events
 function toggleEventEditMode(childIndex: number) {
@@ -3075,19 +3178,123 @@ function toggleEventEditMode(childIndex: number) {
 };
 
 function editChildName(childIndex: number) {
+  openChildSettings(childIndex);
+}
+
+function openChildSettings(childIndex: number) {
   currentChild = childIndex;
-  (document.getElementById('name-input') as HTMLInputElement).value = data.children[childIndex].name;
-  document.getElementById('name-modal')?.classList.add('active');
+  const child = data.children[childIndex];
+  
+  // Populate all fields
+  const nameInput = document.getElementById('name-input') as HTMLInputElement;
+  const weightInput = document.getElementById('weight-input') as HTMLInputElement;
+  const weightDateInput = document.getElementById('weight-date-input') as HTMLInputElement;
+  const birthDateInput = document.getElementById('birth-date-input') as HTMLInputElement;
+  const medNameInput = document.getElementById('med-name') as HTMLInputElement;
+  
+  if (nameInput) nameInput.value = child.name;
+  if (weightInput) weightInput.value = child.weightKg?.toString() || '';
+  if (weightDateInput) weightDateInput.value = child.weightDate || new Date().toISOString().split('T')[0];
+  if (birthDateInput) birthDateInput.value = child.birthDate || '';
+  if (medNameInput) medNameInput.value = '';
+  
+  // Reset medication form
+  selectedDoseCount = 1;
+  document.querySelectorAll('.dose-count-btn').forEach(btn => {
+    btn.classList.toggle('selected', btn.getAttribute('data-doses') === '1');
+  });
+  renderDoseSchedule(1);
+  
+  // Render existing medications
+  renderMedList();
+  
+  // Update preview values
+  updateWeightPreview();
+  
+  // Add listeners for live preview
+  weightInput?.addEventListener('input', updateWeightPreview);
+  weightDateInput?.addEventListener('input', updateWeightPreview);
+  birthDateInput?.addEventListener('input', updateWeightPreview);
+  
+  document.getElementById('child-settings-modal')?.classList.add('active');
   document.body.classList.add('modal-open');
 }
 
-function saveName() {
-  const name = (document.getElementById('name-input') as HTMLInputElement).value.trim();
+function updateWeightPreview() {
+  const weightInput = document.getElementById('weight-input') as HTMLInputElement;
+  const weightDateInput = document.getElementById('weight-date-input') as HTMLInputElement;
+  const birthDateInput = document.getElementById('birth-date-input') as HTMLInputElement;
+  
+  const weight = parseFloat(weightInput?.value || '0');
+  const weightDate = weightDateInput?.value || new Date().toISOString().split('T')[0];
+  const birthDate = birthDateInput?.value;
+  
+  const projectedEl = document.getElementById('projected-weight-display');
+  const targetEl = document.getElementById('daily-target-display');
+  const perFeedEl = document.getElementById('per-feed-display');
+  
+  if (!birthDate || !weight) {
+    if (projectedEl) projectedEl.textContent = '—';
+    if (targetEl) targetEl.textContent = '—';
+    if (perFeedEl) perFeedEl.textContent = '—';
+    return;
+  }
+  
+  // Calculate projected weight
+  const weightDateObj = new Date(weightDate);
+  const now = new Date();
+  const daysSinceWeighIn = Math.floor((now.getTime() - weightDateObj.getTime()) / (1000 * 60 * 60 * 24));
+  const growthRate = getGrowthRateForAge(birthDate);
+  const projected = weight + (Math.max(0, daysSinceWeighIn) * growthRate);
+  
+  // Calculate daily target
+  const mlPerKg = getMlPerKgForAge(birthDate);
+  const dailyTarget = Math.round(projected * mlPerKg);
+  
+  // Calculate per feed
+  const feedSchedule = data.children[currentChild].feedSchedules?.[0];
+  const numFeeds = feedSchedule?.times?.length || 8;
+  const perFeed = dailyTarget / numFeeds;
+  const rounded = Math.ceil(perFeed / 5) * 5;
+  const withBuffer = rounded + 5;
+  
+  if (projectedEl) projectedEl.textContent = `${projected.toFixed(2)} kg`;
+  if (targetEl) targetEl.textContent = `${dailyTarget} mL/day`;
+  if (perFeedEl) perFeedEl.textContent = `${withBuffer} mL`;
+}
+
+function saveChildSettings() {
+  const nameInput = document.getElementById('name-input') as HTMLInputElement;
+  const weightInput = document.getElementById('weight-input') as HTMLInputElement;
+  const weightDateInput = document.getElementById('weight-date-input') as HTMLInputElement;
+  const birthDateInput = document.getElementById('birth-date-input') as HTMLInputElement;
+  
+  const name = nameInput?.value.trim();
+  const weight = parseFloat(weightInput?.value || '0');
+  const weightDate = weightDateInput?.value;
+  const birthDate = birthDateInput?.value;
+  
   if (name) {
     data.children[currentChild].name = name;
-    saveData();
-    updateDisplay();
   }
+  if (weight > 0) {
+    data.children[currentChild].weightKg = weight;
+  }
+  if (weightDate) {
+    data.children[currentChild].weightDate = weightDate;
+  }
+  if (birthDate) {
+    data.children[currentChild].birthDate = birthDate;
+  }
+  
+  // Update feed amounts based on new calculations
+  const recommended = getRecommendedFeedAmount(currentChild);
+  if (recommended > 0) {
+    feedAmounts[currentChild] = recommended;
+  }
+  
+  saveData();
+  updateDisplay();
   closeModal();
 }
 

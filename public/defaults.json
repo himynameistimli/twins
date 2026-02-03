@@ -4,6 +4,9 @@
   "children": [
     {
       "name": "Emily",
+      "birthDate": "2025-12-22",
+      "weightKg": 3.55,
+      "weightDate": "2026-02-03",
       "medications": [],
       "feedSchedules": [
         {
@@ -16,6 +19,9 @@
     },
     {
       "name": "Jimmy",
+      "birthDate": "2025-12-22",
+      "weightKg": 2.7,
+      "weightDate": "2026-02-03",
       "medications": [
         {
           "id": "jimmy-captopril",

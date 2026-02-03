@@ -166,10 +166,11 @@ import Modals from '../components/Modals.astro';
     padding-top: 60px;
   }
 
-  /* Med buttons (dynamically rendered) - fixed size */
+  /* Med buttons - styled like feed/pee/poop buttons */
   .med-btn {
-    @apply flex flex-col items-center justify-center p-2 border-none rounded-lg cursor-pointer transition-all overflow-hidden;
+    @apply flex flex-col items-center justify-center gap-0.5 border border-border rounded-xl font-semibold cursor-pointer bg-card text-white transition-all overflow-hidden relative;
     min-height: 68px;
+    padding: 0.5rem;
   }
 
   .med-btn:active {
@@ -178,19 +179,19 @@ import Modals from '../components/Modals.astro';
 
   .med-btn.urgent {
     background: linear-gradient(135deg, #b91c1c, #991b1b);
-    @apply animate-pulse-urgent;
+    @apply border-transparent animate-pulse-urgent;
   }
 
   .med-btn.soon {
-    @apply bg-card border border-border;
+    @apply bg-card border-yellow-500/50;
   }
 
   .med-btn.normal {
-    @apply bg-card border border-border;
+    @apply bg-card border-border;
   }
 
   .med-btn.done {
-    @apply bg-card border border-border opacity-50;
+    @apply bg-card border-border opacity-50;
   }
 
   .med-btn.add-new {
@@ -202,80 +203,35 @@ import Modals from '../components/Modals.astro';
     @apply border-normal;
   }
 
-  .med-btn.add-new .med-name {
-    @apply text-gray-400;
-  }
-
-  .med-btn.add-new .med-status {
-    @apply text-gray-400;
-  }
-
   .med-name {
-    @apply font-bold text-white text-center leading-tight text-sm w-full px-0.5;
+    @apply text-xs text-gray-400 text-center leading-tight w-full px-0.5;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   .med-status {
-    @apply text-xs text-white/85 mt-0.5 w-full text-center;
+    @apply text-sm font-semibold text-white text-center w-full;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  .med-time {
-    @apply text-[11px] text-white/70;
+  .med-count {
+    @apply text-[10px] text-gray-400;
   }
 
-  /* Edit mode - iOS-style jiggle animation */
-  @keyframes jiggle {
-    0%, 100% { transform: rotate(-0.5deg); }
-    50% { transform: rotate(0.5deg); }
+  .med-btn.urgent .med-name {
+    @apply text-white/80;
+  }
+  
+  .med-btn.urgent .med-status,
+  .med-btn.urgent .med-count {
+    @apply text-white;
   }
 
-  .meds-grid.edit-mode {
-    overflow: visible !important;
-  }
-
-  .meds-grid.edit-mode .med-btn {
-    animation: jiggle 0.25s ease-in-out infinite;
-    position: relative;
-    overflow: visible;
-  }
-
-  .meds-grid.edit-mode .med-btn:nth-child(even) {
-    animation-delay: 0.125s;
-  }
-
-  .meds-grid.edit-mode .med-btn:nth-child(3n) {
-    animation-duration: 0.3s;
-  }
-
-  .meds-grid.edit-mode .med-btn.add-new {
-    animation: none;
-    display: none;
-  }
-
-  /* X delete button - partially outside top-right corner */
-  .med-delete-btn {
-    @apply absolute w-5 h-5 bg-urgent rounded-full flex items-center justify-center text-white text-[10px] font-bold z-30 opacity-0 pointer-events-none transition-all border-none cursor-pointer;
-    top: -6px;
-    right: -6px;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.5);
-    -webkit-tap-highlight-color: transparent;
-  }
-
-  .meds-grid.edit-mode .med-delete-btn {
-    @apply opacity-100 pointer-events-auto;
-  }
-
-  .med-delete-btn:hover {
-    @apply bg-red-500;
-  }
-
-  .med-delete-btn:active {
-    transform: scale(0.85);
+  .med-btn.done .med-status {
+    @apply text-green-500;
   }
 
   /* Event edit mode - jiggle animation for planner events */
@@ -330,15 +286,6 @@ import Modals from '../components/Modals.astro';
 
   .event-edit-done-btn:active {
     transform: scale(0.95);
-  }
-
-  /* Done editing button */
-  .edit-done-btn {
-    @apply bg-normal text-white px-3 py-1 rounded text-xs font-semibold cursor-pointer transition-all;
-  }
-
-  .edit-done-btn:hover {
-    @apply bg-normal/80;
   }
 
   /* Item list in modals (dynamically rendered) */
