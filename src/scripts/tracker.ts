@@ -1,4 +1,4 @@
-import { supabase, deviceId, clientId, subscribeToChanges } from './supabase';
+import { supabase, deviceId, clientId, subscribeToChanges, forceReconnect, type ConnectionStatus } from './supabase';
 
 // Types
 interface Medication {
@@ -2123,6 +2123,24 @@ function setupRealtimeSync() {
     return;
   }
   
+  // Handle connection status changes from the new supabase module
+  const handleConnectionStatus = (status: ConnectionStatus, message?: string) => {
+    switch (status) {
+      case 'connected':
+        updateSyncStatus('realtime', message || 'Realtime sync active');
+        break;
+      case 'connecting':
+        updateSyncStatus('syncing', message || 'Connecting...');
+        break;
+      case 'disconnected':
+        updateSyncStatus('error', message || 'Disconnected');
+        break;
+      case 'error':
+        updateSyncStatus('error', message || 'Connection error');
+        break;
+    }
+  };
+  
   const channel = subscribeToChanges((payload) => {
     // Only process UPDATE events
     if (payload.eventType !== 'UPDATE' && payload.eventType !== 'INSERT') {
@@ -2173,11 +2191,21 @@ function setupRealtimeSync() {
     } finally {
       isApplyingRemoteUpdate = false;
     }
-  });
+  }, handleConnectionStatus);
   
   if (channel) {
     console.log('Realtime sync enabled');
-    updateSyncStatus('realtime', 'Realtime sync active - changes sync instantly');
+  }
+  
+  // Setup click handler on sync status to force reconnect
+  const syncStatusEl = document.getElementById('sync-status');
+  if (syncStatusEl) {
+    syncStatusEl.style.cursor = 'pointer';
+    syncStatusEl.addEventListener('click', () => {
+      console.log('Manual reconnect triggered');
+      showSyncToast('Reconnecting...');
+      forceReconnect();
+    });
   }
 }
 

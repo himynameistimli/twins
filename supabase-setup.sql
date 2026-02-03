@@ -19,3 +19,7 @@ CREATE POLICY "Allow all operations" ON tracker_data
   FOR ALL
   USING (true)
   WITH CHECK (true);
+
+-- Enable realtime for this table (REQUIRED for postgres_changes to work)
+-- This adds the table to Supabase's realtime publication so changes are broadcast via WebSockets
+ALTER PUBLICATION supabase_realtime ADD TABLE tracker_data;
