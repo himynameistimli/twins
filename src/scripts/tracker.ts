@@ -12,6 +12,7 @@ interface FeedSchedule {
   id: string;
   name: string;
   defaultAmount: number;
+  times?: string[];
 }
 
 interface Child {
@@ -129,7 +130,14 @@ let notifiedItems = new Set<string>();
 let audioContext: AudioContext | null = null;
 let notificationDismissed = false;
 let selectedDoseCount = 1;
-let plannerScale = [1, 1]; // Scale for each child's planner
+let plannerScale = [1, 1]; // Scale for each child's planner (synced)
+
+// Helper to sync zoom scale across both panels
+function syncPlannerScale(scale: number) {
+  plannerScale[0] = scale;
+  plannerScale[1] = scale;
+}
+
 // Calendar sync is one-way (write-only to Google Calendar)
 let editMode: boolean[] = [false, false]; // Edit mode per child for medication deletion
 
@@ -227,8 +235,226 @@ async function syncToGoogleCalendar(event: {
   }
 }
 
+// ===== PLANNER TABS =====
+function switchPlannerTab(childIndex: number, tabName: 'summary' | 'events') {
+  // Sync both panels to the same tab
+  [0, 1].forEach(idx => {
+    const container = document.querySelector(`.child-panel[data-child="${idx}"]`);
+    if (!container) return;
+    
+    // Update tab buttons (header tabs)
+    container.querySelectorAll('.header-tab').forEach(tab => {
+      tab.classList.toggle('active', tab.getAttribute('data-tab') === tabName);
+    });
+    
+    // Update tab panels
+    container.querySelectorAll('.tab-panel').forEach(panel => {
+      panel.classList.toggle('active', panel.getAttribute('data-panel') === tabName);
+    });
+    
+    // If switching to events tab, make sure planner is scrolled properly
+    if (tabName === 'events') {
+      const viewport = document.getElementById(`planner-${idx}`);
+      if (viewport) {
+        // Reset scrolled flag to allow re-scroll on tab switch
+        delete viewport.dataset.scrolled;
+        renderPlanner(idx);
+      }
+    }
+  });
+  
+  playClickSound();
+}
+
+function renderSummary(childIndex: number) {
+  const container = document.getElementById(`summary-content-${childIndex}`);
+  if (!container) return;
+  
+  const viewingToday = isViewingToday();
+  const now = new Date();
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  
+  // Get next feed info
+  const feedSchedules = data.children[childIndex].feedSchedules || [];
+  const feedsGiven = data.logs[childIndex].feeds || [];
+  const feedAmount = feedAmounts[childIndex];
+  
+  let nextFeedTime: string | null = null;
+  let nextFeedStatus: 'normal' | 'soon' | 'urgent' | 'done' = 'done';
+  let nextFeedMinutesAway = Infinity;
+  
+  if (viewingToday && feedSchedules.length > 0 && feedSchedules[0].times) {
+    const feedTimes = feedSchedules[0].times as string[];
+    
+    for (const time of feedTimes) {
+      const [h, m] = time.split(':').map(Number);
+      const scheduledMinutes = h * 60 + m;
+      
+      // Check if feed was already given within 30 mins of this time
+      const isFeedGiven = feedsGiven.some(feed => {
+        const feedDate = new Date(feed.timestamp || feed.id);
+        const feedMinutes = feedDate.getHours() * 60 + feedDate.getMinutes();
+        return Math.abs(feedMinutes - scheduledMinutes) < 30;
+      });
+      
+      if (!isFeedGiven) {
+        const diffMins = scheduledMinutes - nowMinutes;
+        
+        // Find the next upcoming or most recent overdue
+        if (diffMins >= -30 && diffMins < nextFeedMinutesAway) {
+          nextFeedMinutesAway = diffMins;
+          const hour12 = h % 12 || 12;
+          const ampm = h >= 12 ? 'pm' : 'am';
+          nextFeedTime = m > 0 ? `${hour12}:${String(m).padStart(2, '0')}${ampm}` : `${hour12}${ampm}`;
+          
+          if (diffMins < -30) nextFeedStatus = 'urgent';
+          else if (diffMins <= 30) nextFeedStatus = 'urgent';
+          else if (diffMins <= 120) nextFeedStatus = 'soon';
+          else nextFeedStatus = 'normal';
+        }
+      }
+    }
+  }
+  
+  // Get ALL medications info with their next dose
+  const meds = data.children[childIndex].medications;
+  const allMedsInfo: { name: string; time: string; status: 'normal' | 'soon' | 'urgent' | 'done'; diffMins: number }[] = [];
+  
+  if (viewingToday) {
+    for (const med of meds) {
+      const doneToday = data.logs[childIndex].medsDone[med.id] || [];
+      
+      // Find the next pending dose for this medication
+      let nextDose: { time: string; status: 'normal' | 'soon' | 'urgent' | 'done'; diffMins: number } | null = null;
+      
+      for (let i = 0; i < med.doseTimes.length; i++) {
+        if (!doneToday.includes(i)) {
+          const [h, m] = med.doseTimes[i].split(':').map(Number);
+          const scheduledMinutes = h * 60 + m;
+          const diffMins = scheduledMinutes - nowMinutes;
+          
+          // Take the closest upcoming or most recent overdue
+          if (!nextDose || (diffMins >= 0 && nextDose.diffMins < 0) || Math.abs(diffMins) < Math.abs(nextDose.diffMins)) {
+            const hour12 = h % 12 || 12;
+            const ampm = h >= 12 ? 'pm' : 'am';
+            const timeStr = m > 0 ? `${hour12}:${String(m).padStart(2, '0')}${ampm}` : `${hour12}${ampm}`;
+            
+            let status: 'normal' | 'soon' | 'urgent' | 'done';
+            if (diffMins < -30) status = 'urgent';
+            else if (diffMins <= 30) status = 'urgent';
+            else if (diffMins <= 120) status = 'soon';
+            else status = 'normal';
+            
+            nextDose = { time: timeStr, status, diffMins };
+          }
+        }
+      }
+      
+      // Check if all doses are done
+      const allDone = med.doseTimes.every((_, i) => doneToday.includes(i));
+      
+      if (allDone) {
+        allMedsInfo.push({ name: med.name, time: '', status: 'done', diffMins: Infinity });
+      } else if (nextDose) {
+        allMedsInfo.push({ name: med.name, ...nextDose });
+      }
+    }
+  } else {
+    // Not viewing today - just list all meds
+    for (const med of meds) {
+      allMedsInfo.push({ name: med.name, time: '', status: 'done', diffMins: Infinity });
+    }
+  }
+  
+  // Filter to only show the next upcoming set (exclude done, get earliest time group)
+  const pendingMeds = allMedsInfo.filter(m => m.status !== 'done');
+  
+  // Sort by time
+  pendingMeds.sort((a, b) => a.diffMins - b.diffMins);
+  
+  // Get meds at the earliest time (within 15 min window to group together)
+  let nextUpMeds: typeof pendingMeds = [];
+  if (pendingMeds.length > 0) {
+    const earliestTime = pendingMeds[0].diffMins;
+    nextUpMeds = pendingMeds.filter(m => Math.abs(m.diffMins - earliestTime) <= 15);
+  }
+  
+  // Check if any medications are configured
+  const hasMeds = meds.length > 0;
+  
+  // Build HTML - rows with time left, value right
+  let html = '';
+  
+  // Next Feed Row
+  const feedTimeLabel = nextFeedMinutesAway <= 0 ? 'now' : (nextFeedTime || '—');
+  html += `<div class="summary-row feed ${nextFeedStatus}">`;
+  html += `<div class="summary-row-left">`;
+  html += `<span class="summary-label">Next Feed</span>`;
+  if (nextFeedTime && viewingToday) {
+    html += `<span class="summary-time ${nextFeedStatus}">${feedTimeLabel}</span>`;
+  } else if (!viewingToday) {
+    html += `<span class="summary-time done">—</span>`;
+  } else {
+    html += `<span class="summary-time done">done</span>`;
+  }
+  html += `</div>`;
+  html += `<div class="summary-row-right">`;
+  if (nextFeedTime && viewingToday) {
+    html += `<span class="summary-value">${feedAmount}<span class="summary-unit">mL</span></span>`;
+  } else if (!viewingToday) {
+    html += `<span class="summary-subtext">past date</span>`;
+  } else {
+    html += `<span class="summary-value text-green-500">✓</span>`;
+  }
+  html += `</div>`;
+  html += `</div>`;
+  
+  // Only show medications section if there are medications configured
+  if (hasMeds) {
+    // Divider
+    html += `<div class="summary-divider"></div>`;
+    
+    // Medications Row
+    const medStatus = nextUpMeds.length > 0 ? nextUpMeds[0].status : 'done';
+    const medTimeLabel = nextUpMeds.length > 0 ? (nextUpMeds[0].diffMins <= 0 ? 'now' : nextUpMeds[0].time) : 'done';
+    
+    html += `<div class="summary-row meds ${medStatus}">`;
+    html += `<div class="summary-row-left">`;
+    html += `<span class="summary-label">Next Meds</span>`;
+    if (!viewingToday) {
+      html += `<span class="summary-time done">—</span>`;
+    } else {
+      html += `<span class="summary-time ${medStatus}">${medTimeLabel}</span>`;
+    }
+    html += `</div>`;
+    html += `<div class="summary-meds-right">`;
+    if (!viewingToday) {
+      html += `<span class="summary-subtext">past date</span>`;
+    } else if (nextUpMeds.length === 0) {
+      html += `<span class="summary-med-done">✓</span>`;
+    } else {
+      for (const med of nextUpMeds) {
+        html += `<span class="summary-med-name">${med.name}</span>`;
+      }
+    }
+    html += `</div>`;
+    html += `</div>`;
+  }
+  
+  container.innerHTML = html;
+}
+
 function setupEventListeners() {
   document.getElementById('dismiss-btn')?.addEventListener('click', dismissNotification);
+  
+  // Tab switching for header tabs
+  document.querySelectorAll('.header-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      const tabName = tab.getAttribute('data-tab');
+      const childIndex = parseInt(tab.getAttribute('data-child') || '0');
+      switchPlannerTab(childIndex, tabName as 'summary' | 'events');
+    });
+  });
   
   document.querySelectorAll('[data-child-name]').forEach(el => {
     el.addEventListener('click', () => {
@@ -546,9 +772,11 @@ function setupPlannerZoom() {
           animationId = requestAnimationFrame(animate);
         } else {
           currentScale = targetScale;
-          plannerScale[i] = targetScale;
+          syncPlannerScale(targetScale);
           clearZoomStyles();
-          renderPlanner(i);
+          // Render both panels synced
+          renderPlanner(0);
+          renderPlanner(1);
           animationId = null;
         }
       }
@@ -593,9 +821,11 @@ function setupPlannerZoom() {
         } else {
           // Settle
           const finalScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, currentScale));
-          plannerScale[i] = finalScale;
+          syncPlannerScale(finalScale);
           clearZoomStyles();
-          renderPlanner(i);
+          // Render both panels synced
+          renderPlanner(0);
+          renderPlanner(1);
           animationId = null;
         }
       }
@@ -659,9 +889,11 @@ function setupPlannerZoom() {
             const targetScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, currentScale));
             animateToScale(targetScale, true);
           } else {
-            plannerScale[i] = currentScale;
+            syncPlannerScale(currentScale);
             clearZoomStyles();
-            renderPlanner(i);
+            // Render both panels synced
+            renderPlanner(0);
+            renderPlanner(1);
           }
         }
       }
@@ -2491,11 +2723,11 @@ function renderMeds(childIndex: number) {
     editMode[childIndex] = false;
     container.classList.remove('edit-mode');
     container.innerHTML = viewingToday ? `
-      <button class="med-btn add-new col-span-3" data-action="open-med-settings" data-child="${childIndex}">
-        <span class="med-name text-xl">+</span>
-        <span class="med-status">Add medication</span>
+      <button class="med-btn add-new col-span-3 h-full min-h-0" data-action="open-med-settings" data-child="${childIndex}">
+        <span class="text-4xl text-gray-400">+</span>
+        <span class="text-sm text-gray-400">Add medication</span>
       </button>
-    ` : '<div class="col-span-3 text-gray-500 text-xs text-center py-4">No medications configured</div>';
+    ` : '<div class="col-span-3 text-gray-500 text-sm text-center py-4">No medications configured</div>';
     return;
   }
 
@@ -2877,6 +3109,7 @@ function updateDisplay() {
   });
   
   for (let i = 0; i < 2; i++) {
+    renderSummary(i);
     renderPlanner(i);
     renderMeds(i);
     updateDiaperCount(i);

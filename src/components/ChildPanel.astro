@@ -27,51 +27,101 @@ const isLeft = side === 'left';
   </div>
 
   <!-- Header (hidden on mobile, shown on tablet+) -->
-  <div class="child-header flex justify-between items-center mb-2">
-    <h1 
-      class:list={[
-        'text-2xl font-bold cursor-pointer',
-        isLeft ? 'text-accent-left' : 'text-accent-right'
-      ]}
-      data-child-name={childIndex}
-    >
-      {defaultName}
-    </h1>
-    <div class="flex items-center gap-2">
+  <div class="child-header flex items-center mb-2 relative">
+    <!-- Left side: name for left panel, sync status placeholder for right -->
+    <div class="flex items-center gap-2 flex-1">
+      {isLeft && (
+        <h1 
+          class="text-2xl font-bold cursor-pointer text-accent-left"
+          data-child-name={childIndex}
+        >
+          {defaultName}
+        </h1>
+      )}
       {isLeft && (
         <div class="sync-status" id="sync-status" title="Sync status">
           <span class="sync-icon">●</span>
         </div>
       )}
-      <span class="date-display text-sm text-gray-400"></span>
+    </div>
+    
+    <!-- Center: tabs -->
+    <div class="header-tabs flex absolute left-1/2 -translate-x-1/2">
+      <button 
+        class="header-tab active"
+        data-tab="summary"
+        data-child={childIndex}
+      >
+        Next
+      </button>
+      <button 
+        class="header-tab"
+        data-tab="events"
+        data-child={childIndex}
+      >
+        Events
+      </button>
+    </div>
+    
+    <!-- Right side: name for right panel -->
+    <div class="flex items-center justify-end flex-1">
+      {!isLeft && (
+        <h1 
+          class="text-2xl font-bold cursor-pointer text-accent-right"
+          data-child-name={childIndex}
+        >
+          {defaultName}
+        </h1>
+      )}
     </div>
   </div>
   
   <!-- Daily Planner (Top Section - ~60% height) -->
-  <div class="planner-container flex-1 bg-panel rounded-xl mb-3 overflow-hidden min-h-0 relative">
-    <div 
-      class="planner-viewport h-full overflow-auto"
-      id={`planner-${childIndex}`}
-      data-child={childIndex}
-    >
-      <div class="planner-content" id={`planner-content-${childIndex}`}>
-        <!-- Timeline will be rendered here -->
+  <div class="planner-container flex-1 bg-panel rounded-xl mb-3 overflow-hidden min-h-0 relative flex flex-col">
+    <!-- Tab Content -->
+    <div class="planner-tab-content flex-1 min-h-0 relative">
+      <!-- Summary Tab (visible by default) -->
+      <div 
+        class="tab-panel active"
+        id={`summary-tab-${childIndex}`}
+        data-panel="summary"
+      >
+        <div class="summary-content h-full flex flex-col items-center justify-start gap-4 p-4 pt-2" id={`summary-content-${childIndex}`}>
+          <!-- Next feed and next medication will be rendered here -->
+        </div>
+      </div>
+      
+      <!-- Events Tab -->
+      <div 
+        class="tab-panel"
+        id={`events-tab-${childIndex}`}
+        data-panel="events"
+      >
+        <div 
+          class="planner-viewport h-full overflow-auto"
+          id={`planner-${childIndex}`}
+          data-child={childIndex}
+        >
+          <div class="planner-content" id={`planner-content-${childIndex}`}>
+            <!-- Timeline will be rendered here -->
+          </div>
+        </div>
+        <!-- Done button for event edit mode -->
+        <button 
+          class="event-edit-done-btn"
+          id={`event-edit-done-${childIndex}`}
+          onclick={`exitEventEditMode(${childIndex})`}
+        >
+          Done
+        </button>
       </div>
     </div>
-    <!-- Done button for event edit mode -->
-    <button 
-      class="event-edit-done-btn"
-      id={`event-edit-done-${childIndex}`}
-      onclick={`exitEventEditMode(${childIndex})`}
-    >
-      Done
-    </button>
   </div>
   
   <!-- Bottom Controls Section -->
   <div class="controls-section flex flex-col gap-2 flex-shrink-0">
     <!-- Meds Row - Fixed height with scrollable grid -->
-    <div class="bg-panel rounded-xl p-3 h-[220px] flex flex-col meds-wrapper">
+    <div class="bg-panel rounded-xl p-3 h-[230px] flex flex-col meds-wrapper">
       <div class="flex justify-between items-center mb-2 flex-shrink-0">
         <span class="text-xs font-semibold text-gray-400 uppercase tracking-wide">Medications</span>
         <button 
@@ -129,7 +179,164 @@ const isLeft = side === 'left';
   </div>
 </div>
 
-<style>
+<style is:global>
+  
+  /* Header Tabs (inline with name) */
+  .header-tabs {
+    @apply flex bg-card/50 rounded-lg overflow-hidden;
+  }
+  
+  .header-tab {
+    @apply px-3 py-1 text-xs font-semibold text-gray-400 bg-transparent border-none cursor-pointer transition-all;
+  }
+  
+  .header-tab:hover {
+    @apply text-gray-300;
+  }
+  
+  .header-tab.active {
+    @apply text-white bg-accent-left/30;
+  }
+  
+  /* Right panel uses different accent */
+  .child-panel:not(.border-r-2) .header-tab.active {
+    @apply bg-accent-right/30;
+  }
+  
+  /* Tab panel styling */
+  .planner-tab-content {
+    position: relative;
+  }
+  
+  .tab-panel {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease, visibility 0.2s ease;
+  }
+  
+  .tab-panel.active {
+    opacity: 1;
+    visibility: visible;
+    position: relative;
+    height: 100%;
+  }
+  
+  /* Summary tab content - vertical stacked layout */
+  .summary-content {
+    @apply flex-col justify-center items-stretch gap-6 px-4;
+  }
+  
+  /* Each row: time left, value right */
+  .summary-row {
+    @apply flex items-center justify-between w-full;
+  }
+  
+  .summary-row-left {
+    @apply flex flex-col items-start gap-0;
+  }
+  
+  .summary-row-right {
+    @apply flex flex-col items-end gap-0;
+  }
+  
+  .summary-label {
+    @apply text-[10px] uppercase tracking-widest text-gray-500 font-medium;
+    letter-spacing: 0.1em;
+  }
+  
+  .summary-time {
+    @apply text-4xl font-bold leading-tight;
+  }
+  
+  .summary-time.urgent {
+    @apply text-urgent;
+  }
+  
+  .summary-time.soon {
+    @apply text-yellow-400;
+  }
+  
+  .summary-time.normal {
+    @apply text-white;
+  }
+  
+  .summary-time.done {
+    @apply text-gray-500;
+  }
+  
+  .summary-value {
+    @apply text-4xl font-extrabold tracking-tight leading-tight;
+  }
+  
+  .summary-unit {
+    @apply text-lg font-normal text-gray-400 ml-1;
+  }
+  
+  .summary-subtext {
+    @apply text-sm text-gray-400;
+  }
+  
+  .summary-row.feed .summary-value {
+    @apply text-normal;
+  }
+  
+  .summary-row.urgent .summary-time {
+    @apply animate-pulse;
+  }
+  
+  .summary-divider {
+    @apply w-full h-px bg-border;
+  }
+  
+  /* Medications row */
+  .summary-meds-right {
+    @apply flex flex-col items-end gap-0.5;
+  }
+  
+  .summary-med-name {
+    @apply text-xl font-bold text-white leading-tight;
+  }
+  
+  .summary-row.urgent .summary-med-name {
+    @apply text-urgent;
+  }
+  
+  .summary-row.soon .summary-med-name {
+    @apply text-yellow-400;
+  }
+  
+  .summary-med-done {
+    @apply text-xl text-green-500 font-medium;
+  }
+  
+  .summary-med-empty {
+    @apply text-sm text-gray-500 italic;
+  }
+  
+  /* Tablet: slightly larger */
+  @media (min-width: 640px) {
+    .summary-time {
+      @apply text-5xl;
+    }
+    
+    .summary-value {
+      @apply text-5xl;
+    }
+    
+    .summary-unit {
+      @apply text-2xl;
+    }
+    
+    .summary-med-name {
+      @apply text-2xl;
+    }
+    
+    .summary-label {
+      @apply text-xs;
+    }
+  }
   
   /* Mobile phone: reduce padding to maximize space */
   @media (max-width: 639px) {
@@ -144,6 +351,30 @@ const isLeft = side === 'left';
     
     .child-panel .mb-3 {
       margin-bottom: 0.375rem;
+    }
+    
+    .planner-tab {
+      @apply py-1.5 text-[10px];
+    }
+    
+    .summary-content {
+      @apply gap-4 px-3;
+    }
+    
+    .summary-time {
+      @apply text-3xl;
+    }
+    
+    .summary-value {
+      @apply text-3xl;
+    }
+    
+    .summary-unit {
+      @apply text-base;
+    }
+    
+    .summary-med-name {
+      @apply text-lg;
     }
   }
   
@@ -196,6 +427,16 @@ const isLeft = side === 'left';
   .meds-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
+  }
+  
+  /* When only add-new button exists, make it fill the container */
+  .meds-grid:has(.add-new:only-child) {
+    display: flex;
+  }
+  
+  .meds-grid .add-new:only-child {
+    flex: 1;
+    width: 100%;
     gap: 0.5rem;
   }
   
@@ -239,16 +480,16 @@ const isLeft = side === 'left';
     }
   }
   
-  /* Tablet adjustments - reduce meds height for smaller viewports */
+  /* Tablet adjustments - ensure meds can fit 2 rows of buttons */
   @media (min-width: 640px) and (max-height: 900px) {
     .meds-wrapper {
-      height: 180px !important;
+      height: 210px !important;
     }
   }
   
   @media (min-width: 640px) and (max-height: 700px) {
     .meds-wrapper {
-      height: 140px !important;
+      height: 210px !important;
     }
     
     .planner-container {

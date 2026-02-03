@@ -26,6 +26,10 @@ import Modals from '../components/Modals.astro';
   
   <div class="panels-container flex h-full w-full transition-[padding-top] duration-300 sm:flex-row">
     <ChildPanel side="left" childIndex={1} defaultName="Jimmy" />
+    <!-- Centered date divider (tablet+ only) -->
+    <div class="center-date-divider">
+      <span class="date-display"></span>
+    </div>
     <ChildPanel side="right" childIndex={0} defaultName="Emily" />
   </div>
   
@@ -131,16 +135,29 @@ import Modals from '../components/Modals.astro';
     }
   }
   
+  /* Center date divider - hidden on mobile, shown on tablet+ */
+  .center-date-divider {
+    @apply hidden;
+  }
+  
   /* Tablet and larger: side-by-side layout */
   @media (min-width: 640px) {
     .panels-container {
       padding-top: 0;
       height: 100vh;
       height: 100dvh; /* Dynamic viewport height for tablets */
+      position: relative;
     }
     
     .child-panel {
       @apply w-1/2;
+    }
+    
+    /* Centered date between panels */
+    .center-date-divider {
+      @apply flex absolute top-4 left-1/2 -translate-x-1/2 z-10;
+      @apply bg-dark/90 backdrop-blur-sm px-3 py-1 rounded-full;
+      @apply text-sm text-gray-400 border border-border/50;
     }
   }
   
@@ -190,7 +207,7 @@ import Modals from '../components/Modals.astro';
   }
 
   .med-btn.add-new .med-status {
-    @apply text-gray-400 text-[10px];
+    @apply text-gray-400;
   }
 
   .med-name {
@@ -378,11 +395,16 @@ import Modals from '../components/Modals.astro';
     background: linear-gradient(180deg, rgba(245, 158, 11, 0.05) 0%, transparent 100px);
   }
 
-  /* Draggable events */
-  .planner-event[data-draggable="true"] {
+  /* All planner events - prevent text selection */
+  .planner-event,
+  .planner-event * {
     @apply select-none;
     -webkit-user-select: none;
     -webkit-touch-callout: none;
+  }
+
+  /* Draggable events */
+  .planner-event[data-draggable="true"] {
     -webkit-tap-highlight-color: transparent;
     touch-action: none;
     transition: transform 0.15s ease, box-shadow 0.15s ease;
