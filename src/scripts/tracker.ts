@@ -404,6 +404,7 @@ function renderSummary(childIndex: number) {
   let nextFeedTime: string | null = null;
   let nextFeedStatus: 'normal' | 'soon' | 'urgent' | 'done' = 'done';
   let nextFeedMinutesAway = Infinity;
+  let nextFeedIsTomorrow = false;
   
   if (viewingToday && feedSchedules.length > 0 && feedSchedules[0].times) {
     const feedTimes = feedSchedules[0].times as string[];
@@ -435,6 +436,23 @@ function renderSummary(childIndex: number) {
           else nextFeedStatus = 'normal';
         }
       }
+    }
+    
+    // If all feeds are done for today, show tomorrow's first feed
+    if (!nextFeedTime && feedTimes.length > 0) {
+      // Sort feed times to find the earliest
+      const sortedTimes = [...feedTimes].sort((a, b) => {
+        const [ah, am] = a.split(':').map(Number);
+        const [bh, bm] = b.split(':').map(Number);
+        return (ah * 60 + am) - (bh * 60 + bm);
+      });
+      
+      const [h, m] = sortedTimes[0].split(':').map(Number);
+      const hour12 = h % 12 || 12;
+      const ampm = h >= 12 ? 'pm' : 'am';
+      nextFeedTime = m > 0 ? `${hour12}:${String(m).padStart(2, '0')}${ampm}` : `${hour12}${ampm}`;
+      nextFeedStatus = 'done'; // Use 'done' styling (green/muted) for tomorrow's items
+      nextFeedIsTomorrow = true;
     }
   }
   
@@ -496,9 +514,42 @@ function renderSummary(childIndex: number) {
   
   // Get meds at the earliest time (within 15 min window to group together)
   let nextUpMeds: typeof pendingMeds = [];
+  let nextMedsIsTomorrow = false;
   if (pendingMeds.length > 0) {
     const earliestTime = pendingMeds[0].diffMins;
     nextUpMeds = pendingMeds.filter(m => Math.abs(m.diffMins - earliestTime) <= 15);
+  } else if (viewingToday && meds.length > 0) {
+    // All meds done for today - find tomorrow's first meds
+    // Collect all dose times from all meds with their names
+    const tomorrowDoses: { name: string; time: string; minutes: number }[] = [];
+    
+    for (const med of meds) {
+      for (const doseTime of med.doseTimes) {
+        const [h, m] = doseTime.split(':').map(Number);
+        const minutes = h * 60 + m;
+        const hour12 = h % 12 || 12;
+        const ampm = h >= 12 ? 'pm' : 'am';
+        const timeStr = m > 0 ? `${hour12}:${String(m).padStart(2, '0')}${ampm}` : `${hour12}${ampm}`;
+        tomorrowDoses.push({ name: med.name, time: timeStr, minutes });
+      }
+    }
+    
+    // Sort by time to find earliest
+    tomorrowDoses.sort((a, b) => a.minutes - b.minutes);
+    
+    if (tomorrowDoses.length > 0) {
+      const earliestMinutes = tomorrowDoses[0].minutes;
+      // Get all meds at the earliest time (within 15 min window)
+      const earliestMeds = tomorrowDoses.filter(d => Math.abs(d.minutes - earliestMinutes) <= 15);
+      
+      nextUpMeds = earliestMeds.map(d => ({
+        name: d.name,
+        time: d.time,
+        status: 'done' as const, // Use 'done' styling for tomorrow's items
+        diffMins: d.minutes + (24 * 60) // Tomorrow
+      }));
+      nextMedsIsTomorrow = true;
+    }
   }
   
   // Check if any medications are configured
@@ -508,25 +559,44 @@ function renderSummary(childIndex: number) {
   let html = '';
   
   // Next Feed Row
-  const feedTimeLabel = nextFeedMinutesAway <= 0 ? 'now' : (nextFeedTime || '—');
+  let feedTimeLabel: string;
+  let feedHoursAway = 0;
+  if (nextFeedIsTomorrow) {
+    // Calculate hours until tomorrow's feed
+    const feedScheduleTimes = feedSchedules[0].times as string[];
+    const sortedTimes = [...feedScheduleTimes].sort((a, b) => {
+      const [ah, am] = a.split(':').map(Number);
+      const [bh, bm] = b.split(':').map(Number);
+      return (ah * 60 + am) - (bh * 60 + bm);
+    });
+    const [h, m] = sortedTimes[0].split(':').map(Number);
+    const tomorrowFeedMinutes = h * 60 + m;
+    const minutesUntilMidnight = (24 * 60) - nowMinutes;
+    const totalMinutesAway = minutesUntilMidnight + tomorrowFeedMinutes;
+    feedHoursAway = Math.round(totalMinutesAway / 60);
+    feedTimeLabel = `Tomorrow ${nextFeedTime}`;
+  } else {
+    feedTimeLabel = nextFeedMinutesAway <= 0 ? 'now' : (nextFeedTime || '—');
+  }
   html += `<div class="summary-row feed ${nextFeedStatus}">`;
   html += `<div class="summary-row-left">`;
   html += `<span class="summary-label">Next Feed</span>`;
-  if (nextFeedTime && viewingToday) {
-    html += `<span class="summary-time ${nextFeedStatus}">${feedTimeLabel}</span>`;
-  } else if (!viewingToday) {
+  if (!viewingToday) {
     html += `<span class="summary-time done">—</span>`;
+  } else if (nextFeedIsTomorrow) {
+    html += `<span class="summary-time tomorrow ${nextFeedStatus}">${feedTimeLabel}</span>`;
+    html += `<span class="summary-countdown">in ${feedHoursAway} hour${feedHoursAway !== 1 ? 's' : ''}</span>`;
   } else {
-    html += `<span class="summary-time done">done</span>`;
+    html += `<span class="summary-time ${nextFeedStatus}">${feedTimeLabel}</span>`;
   }
   html += `</div>`;
   html += `<div class="summary-row-right">`;
-  if (nextFeedTime && viewingToday) {
-    html += `<span class="summary-value">${feedAmount}<span class="summary-unit">mL</span></span>`;
-  } else if (!viewingToday) {
+  if (!viewingToday) {
     html += `<span class="summary-subtext">past date</span>`;
-  } else {
+  } else if (nextFeedIsTomorrow) {
     html += `<span class="summary-value text-green-500">✓</span>`;
+  } else {
+    html += `<span class="summary-value">${feedAmount}<span class="summary-unit">mL</span></span>`;
   }
   html += `</div>`;
   html += `</div>`;
@@ -538,13 +608,39 @@ function renderSummary(childIndex: number) {
     
     // Medications Row
     const medStatus = nextUpMeds.length > 0 ? nextUpMeds[0].status : 'done';
-    const medTimeLabel = nextUpMeds.length > 0 ? (nextUpMeds[0].diffMins <= 0 ? 'now' : nextUpMeds[0].time) : 'done';
+    let medTimeLabel: string;
+    let medHoursAway = 0;
+    if (nextMedsIsTomorrow) {
+      // Calculate hours until tomorrow's med
+      const tomorrowMedDoses: number[] = [];
+      for (const med of meds) {
+        for (const doseTime of med.doseTimes) {
+          const [h, m] = doseTime.split(':').map(Number);
+          tomorrowMedDoses.push(h * 60 + m);
+        }
+      }
+      tomorrowMedDoses.sort((a, b) => a - b);
+      const tomorrowMedMinutes = tomorrowMedDoses[0];
+      const minutesUntilMidnight = (24 * 60) - nowMinutes;
+      const totalMinutesAway = minutesUntilMidnight + tomorrowMedMinutes;
+      medHoursAway = Math.round(totalMinutesAway / 60);
+      medTimeLabel = `Tomorrow ${nextUpMeds[0].time}`;
+    } else if (nextUpMeds.length > 0 && nextUpMeds[0].diffMins <= 0) {
+      medTimeLabel = 'now';
+    } else if (nextUpMeds.length > 0) {
+      medTimeLabel = nextUpMeds[0].time;
+    } else {
+      medTimeLabel = '—';
+    }
     
     html += `<div class="summary-row meds ${medStatus}">`;
     html += `<div class="summary-row-left">`;
     html += `<span class="summary-label">Next Meds</span>`;
     if (!viewingToday) {
       html += `<span class="summary-time done">—</span>`;
+    } else if (nextMedsIsTomorrow) {
+      html += `<span class="summary-time tomorrow ${medStatus}">${medTimeLabel}</span>`;
+      html += `<span class="summary-countdown">in ${medHoursAway} hour${medHoursAway !== 1 ? 's' : ''}</span>`;
     } else {
       html += `<span class="summary-time ${medStatus}">${medTimeLabel}</span>`;
     }
@@ -552,7 +648,7 @@ function renderSummary(childIndex: number) {
     html += `<div class="summary-meds-right">`;
     if (!viewingToday) {
       html += `<span class="summary-subtext">past date</span>`;
-    } else if (nextUpMeds.length === 0) {
+    } else if (nextMedsIsTomorrow) {
       html += `<span class="summary-med-done">✓</span>`;
     } else {
       for (const med of nextUpMeds) {
@@ -1333,7 +1429,7 @@ function renderPlanner(childIndex: number) {
   if (viewingToday) {
     const currentY = (currentHour + currentMinute / 60) * hourHeight;
     html += `
-      <div class="absolute left-12 right-0 h-0.5 bg-urgent z-10" style="top: ${currentY}px;">
+      <div class="absolute left-12 right-0 h-0.5 bg-urgent z-10" style="top: ${currentY}px; pointer-events: none;">
         <div class="absolute -left-1 -top-1 w-2.5 h-2.5 rounded-full bg-urgent"></div>
       </div>
     `;
@@ -2619,13 +2715,19 @@ function addOverdueMed(childIndex: number) {
       if (!log.medsDone[med.id].includes(doseIndex)) {
         log.medsDone[med.id].push(doseIndex);
         
-        // Log the actual time given
+        // Use the scheduled dose time instead of current time
+        const scheduledTime = med.doseTimes[doseIndex];
+        const [hours, minutes] = scheduledTime.split(':').map(Number);
+        const doseDate = new Date();
+        doseDate.setHours(hours, minutes, 0, 0);
+        
         if (!log.meds) log.meds = [];
         log.meds.push({
-          id: med.id,
-          name: med.name,
-          time: new Date().toISOString(),
-          doseIndex
+          medId: med.id,
+          medName: med.name,
+          time: doseDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
+          doseIndex,
+          timestamp: doseDate.getTime()
         });
         
         saveData();
@@ -2927,21 +3029,26 @@ function getMedUrgency(med: Medication, childIndex: number): Urgency {
     // Log to timeline
     const med = data.children[childIndex].medications.find(m => m.id === medId);
     if (med) {
-      const now = new Date();
-      const time = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+      // Use the scheduled dose time instead of current time
+      const scheduledTime = med.doseTimes[doseIndex];
+      const [hours, minutes] = scheduledTime.split(':').map(Number);
+      const doseDate = new Date();
+      doseDate.setHours(hours, minutes, 0, 0);
+      
+      const time = doseDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
       data.logs[childIndex].meds.push({
         medId,
         medName: med.name,
         doseIndex,
         time,
-        timestamp: Date.now()
+        timestamp: doseDate.getTime()
       });
       
       // Sync to Google Calendar
       syncToGoogleCalendar({
         summary: med.name,
         description: `Medication: ${med.name} (Dose ${doseIndex + 1}/${med.doseTimes.length})`,
-        startTime: now,
+        startTime: doseDate,
         childName: data.children[childIndex].name,
         eventType: 'med'
       });
